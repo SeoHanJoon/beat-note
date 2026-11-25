@@ -4,17 +4,17 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useEffect, useRef, useState } from "react";
 import { CONVERT_MESSAGES, ConvertError, convertPdf, type Progress } from "@/lib/convert/convert";
 import { MAX_BYTES, openPdf, PDF_MESSAGES, PdfError } from "@/lib/convert/pdf";
-import { expandScore } from "@/lib/song/expand";
+import type { ReadScore } from "@/lib/reader/types";
+import { expandScore, type Source } from "@/lib/song/expand";
 import type { Song } from "@/lib/song/types";
-import { DownloadButton } from "./DownloadButton";
-import { NotePreview } from "./NotePreview";
+import { Editor } from "./Editor";
 import { PdfPicker } from "./PdfPicker";
 
 type State =
   | { step: "idle" }
   | { step: "working"; name: string; progress: Progress }
   | { step: "error"; message: string }
-  | { step: "done"; name: string; song: Song; pages: HTMLCanvasElement[] };
+  | { step: "done"; name: string; song: Song; sources: Source[][]; score: ReadScore; pages: HTMLCanvasElement[] };
 
 const PROGRESS_TEXT: Record<Progress["step"], string> = { draw: "쪽을 그리는 중", load: "인식 도구를 불러오는 중", read: "악보를 읽는 중" };
 
@@ -37,8 +37,8 @@ export function Converter() {
       pdf = await openPdf(new Uint8Array(await file.arrayBuffer()));
       signal.throwIfAborted();
       const { score, pages } = await convertPdf(pdf, progress, signal);
-      const { song } = expandScore(score, { id: crypto.randomUUID() });
-      if (!signal.aborted) setState({ step: "done", name: file.name, song, pages });
+      const { song, sources } = expandScore(score, { id: crypto.randomUUID() });
+      if (!signal.aborted) setState({ step: "done", name: file.name, song, sources, score, pages });
     } catch (error) {
       if (signal.aborted) return;
       const message =
@@ -53,8 +53,6 @@ export function Converter() {
     running.current?.abort();
     setState({ step: "idle" });
   }
-
-  const checks = state.step === "done" ? state.song.items.filter((item) => item.type === "measure" && item.check).length : 0;
 
   return (
     <>
@@ -79,39 +77,11 @@ export function Converter() {
         )}
         {state.step === "done" && (
           <p className="summary">
-            변환했습니다. {checks > 0 ? `확인할 마디가 ${checks}개 있습니다.` : "확인 표시된 마디가 없습니다."} 자동 인식은 틀릴 수 있으니 원본과 비교해 주세요.
+            변환했습니다. 자동 인식은 틀릴 수 있으니 원본과 비교해 주세요. 확인 표시가 없는 마디도 틀릴 수 있습니다.
           </p>
         )}
       </div>
-      {state.step === "done" && (
-        <>
-          <p>
-            <DownloadButton song={state.song} />
-          </p>
-          <NotePreview song={state.song} />
-          <h2>원본</h2>
-          <div className="pages">
-            {state.pages.map((canvas, i) => (
-              <PageImage key={i} canvas={canvas} number={i + 1} />
-            ))}
-          </div>
-        </>
-      )}
+      {state.step === "done" && <Editor key={state.song.id} song={state.song} sources={state.sources} score={state.score} pages={state.pages} />}
     </>
-  );
-}
-
-function PageImage({ canvas, number }: { canvas: HTMLCanvasElement; number: number }) {
-  const holder = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    canvas.setAttribute("role", "img");
-    canvas.setAttribute("aria-label", `${number}쪽`);
-    holder.current?.replaceChildren(canvas);
-  }, [canvas, number]);
-  return (
-    <figure className="page">
-      <div ref={holder} />
-      <figcaption>{number}쪽</figcaption>
-    </figure>
   );
 }

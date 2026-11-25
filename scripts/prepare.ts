@@ -7,6 +7,8 @@ const root = join(import.meta.dirname, "..");
 const from = join(root, "node_modules", "pdfjs-dist");
 const to = join(root, "public", "vendor", "pdfjs");
 
+// 빌드가 실패했을 때 이전 결과로 시험하지 않도록 지운다.
+rmSync(join(root, "out"), { recursive: true, force: true });
 rmSync(join(root, "public", "vendor"), { recursive: true, force: true });
 mkdirSync(to, { recursive: true });
 
