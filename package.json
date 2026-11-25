@@ -15,7 +15,9 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "node --test 'tests/**/*.test.ts'",
     "template": "node scripts/template-hash.ts",
-    "e2e": "node --test 'tests/e2e/*.e2e.ts'"
+    "e2e": "node --test 'tests/e2e/*.e2e.ts'",
+    "scores": "node scripts/make-scores.ts",
+    "measure": "node scripts/measure.ts"
   },
   "dependencies": {
     "next": "16.4.6",
@@ -24,10 +26,17 @@
     "react-dom": "19.3.1"
   },
   "devDependencies": {
+    "@fontsource/gowun-dodum": "5.3.0",
+    "@fontsource/nanum-gothic": "5.3.0",
+    "@fontsource/nanum-myeongjo": "5.3.0",
+    "@fontsource/nanum-pen-script": "5.3.0",
+    "@fontsource/noto-sans-kr": "5.3.1",
+    "@napi-rs/canvas": "1.2.1",
     "@types/node": "24.19.3",
     "@types/react": "19.3.1",
     "@types/react-dom": "19.3.0",
     "playwright": "1.65.1",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "verovio": "6.4.1"
   }
 }

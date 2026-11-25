@@ -29,6 +29,8 @@ next-env.d.ts
 
 # 예외: 가사가 없는 결과 템플릿
 !/public/note-template.html
+# 예외: 직접 만든 시험 악보
+!/tests/scores/*.pdf
 
 # 운영체제, 편집기
 .DS_Store
