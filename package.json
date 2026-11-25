@@ -17,7 +17,8 @@
     "template": "node scripts/template-hash.ts",
     "e2e": "node --test 'tests/e2e/*.e2e.ts'",
     "scores": "node scripts/make-scores.ts",
-    "measure": "node scripts/measure.ts"
+    "measure": "node scripts/measure.ts",
+    "measure:local": "node scripts/measure-local.ts"
   },
   "dependencies": {
     "next": "16.4.6",
