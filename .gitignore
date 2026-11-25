@@ -36,3 +36,6 @@ next-env.d.ts
 .DS_Store
 .vscode/
 .idea/
+
+# Vercel 연결 정보
+.vercel/
