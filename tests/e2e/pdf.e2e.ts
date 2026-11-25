@@ -46,6 +46,11 @@ for (const type of [chromium, webkit]) {
       const page = await browser.newPage();
       const seen = watch(page, [url]);
       await page.goto(url + "/convert/");
+      await page.waitForLoadState("networkidle");
+      const sent: string[] = [];
+      page.on("request", (request) => {
+        if (request.method() !== "GET" || request.postData()) sent.push(`${request.method()} ${request.url()}`);
+      });
       await page.locator("input[type=file]").setInputFiles(join(scores, "d-repeat.pdf"));
       await page.locator(".summary").waitFor({ timeout: 150_000 });
       await page.getByRole("tab", { name: "미리보기" }).click();
@@ -60,6 +65,7 @@ for (const type of [chromium, webkit]) {
       assert.equal(count, truth.order.length);
       const text = song.items.flatMap((i) => (i.type === "measure" ? i.beats.flatMap((b) => b.notes.flatMap((n) => (n.kind === "note" ? [n.text] : []))) : [])).join("");
       assert.ok(text.startsWith("창이대로앉아서노래"), text);
+      assert.deepEqual(sent, [], "파일을 고른 뒤에 보낸 것이 없음");
       assert.deepEqual([seen.external, seen.problems], [[], []]);
     } finally {
       await browser.close();

@@ -18,7 +18,11 @@ const HEADERS = Object.fromEntries(
 );
 
 /** out/을 보안 헤더와 함께 내보내는 단순한 정적 서버. headers가 false면 헤더 없이 */
+/** BEAT_NOTE_URL이 있으면 그 주소(공개 사이트)를 시험한다. */
+export const REMOTE = process.env.BEAT_NOTE_URL?.replace(/\/$/, "");
+
 export async function serveOut(headers = true): Promise<{ url: string; server: Server }> {
+  if (REMOTE) return { url: REMOTE, server: createServer() };
   const server = createServer((request, response) => {
     let path = normalize(join(OUT, decodeURIComponent(new URL(request.url!, "http://x").pathname)));
     if (path.startsWith(OUT) && existsSync(path) && statSync(path).isDirectory()) path = join(path, "index.html");
