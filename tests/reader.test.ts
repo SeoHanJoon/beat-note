@@ -11,6 +11,7 @@ import { solveMeasure } from "../src/lib/reader/rhythm.ts";
 import type { NoteMark } from "../src/lib/reader/symbols.ts";
 import { alignSyllables } from "../src/lib/reader/lyrics.ts";
 import { compare } from "./support/compare.ts";
+import { DISTORTIONS } from "./support/distort.ts";
 import { nodeOcr } from "./support/ocr.ts";
 import { renderPdf } from "./support/render.ts";
 
@@ -113,4 +114,28 @@ test("모델 파일이 기록한 것과 같다", () => {
   const model = readFileSync(join(import.meta.dirname, "..", "public/models/korean-rec.onnx"));
   const readme = readFileSync(join(import.meta.dirname, "..", "public/models/README.txt"), "utf8");
   assert.ok(readme.includes(createHash("sha256").update(model).digest("hex")));
+});
+
+for (const [label, score, minimum] of [["0.5° 기울임", "c-six-eight", 1], ["잡음", "d-repeat", 0.9], ["200dpi", "a-four-four", 1], ["150dpi", "b-three-four", 1], ["흐림", "a-four-four", 0.9], ["그림자", "d-repeat", 1]] as const) {
+  test(`손상된 이미지: ${score} ${label}`, async () => {
+    const apply = DISTORTIONS.find(([n]) => n === label)![1];
+    const pages = await renderPdf(join(dir, score + ".pdf"));
+    const r = compare(truthOf(score), await readScore(pages.map(apply)));
+    assert.deepEqual(r.unflagged, []);
+    assert.ok(r.measureExact >= minimum, `박자 ${r.measureExact}`);
+  });
+}
+
+test("아주 작은 조각이 많은 이미지에서 멈추지 않는다", async () => {
+  const pages = await renderPdf(join(dir, "b-three-four.pdf"));
+  const dotted = pages.map((p) => ({ ...p, data: Uint8Array.from(p.data, (v, i) => ((Math.imul(i, 2654435761) >>> 20) < 160 ? 0 : v)) }));
+  await readScore(dotted, { ocr: await nodeOcr() });
+});
+
+test("크기를 바꿔 읽어도 마디의 자리는 원본 기준이다", async () => {
+  const pages = await renderPdf(join(dir, "a-four-four.pdf"));
+  const half = DISTORTIONS.find(([n]) => n === "150dpi")![1];
+  const [a, b] = [await readScore(pages), await readScore(pages.map(half))];
+  const [x, y] = [a.measures[5]!.box, b.measures[5]!.box];
+  for (const key of ["x", "y", "width", "height"] as const) assert.ok(Math.abs(x[key] / 2 - y[key]) < 12, `${key} ${x[key]} ${y[key]}`);
 });
