@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'sha256-D3hrSdq6CLQ9SHcWwSWuVyGfGkyZdl3kNH6U55XbmQY='; base-uri 'none'; form-action 'none'">
+<title>박자 노트</title>
+<style>
+  :root {
+    --paper: #fbfbfa; --ink: #1b1d21; --sub: #5f656f; --faint: #7d838d;
+    --rule: #e9eaed; --line: #d5d8dd; --track: #eef0f2;
+    --hold: #7f9fd6; --play: #d9480f; --play-dark: #bd3d0b; --play-bg: #fff3ea;
+    --g: 3.2;        /* 박 사이 간격(%) */
+    --syl: 23px;     /* 가사 크기 */
+    --num: 15px;     /* 숫자 크기 */
+    --ring: 26px;    /* 박 동그라미 크기 */
+    --row: 22px;     /* 줄 위아래 여백 */
+    --pad: 14px;     /* 줄 좌우 여백 */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font-family: Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 24px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* 제목 */
+  .top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding-top: 40px; padding-bottom: 20px; }
+  h1 { font-size: 28px; line-height: 1.25; letter-spacing: -.02em; margin: 0; }
+  .by, .tip { margin: 0; color: var(--sub); font-size: 14px; }
+  .tip { margin-left: auto; font-size: 13px; }
+
+  /* 조작 막대 */
+  .bar {
+    position: sticky; top: 0; z-index: 2; background: var(--paper);
+    border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+  }
+  .bar .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding-top: 10px; padding-bottom: 10px; }
+  .bar .push { margin-left: auto; }
+  .bar button, .bar input { font: inherit; color: inherit; }
+  .bar button { cursor: pointer; border: 0; background: none; padding: 0; }
+  .bar svg { display: block; fill: currentColor; }
+  .transport { display: flex; gap: 8px; }
+  #play {
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 112px; height: 40px;
+    border-radius: 20px; background: var(--play); color: #fff; font-size: 15px; font-weight: 600;
+  }
+  #play:hover { background: var(--play-dark); }
+  #play .ic-pause, #play.on .ic-play { display: none; }
+  #play.on .ic-pause { display: block; }
+  #restart { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--sub); }
+  #restart:hover { background: var(--track); color: var(--ink); }
+
+  .tempo { display: flex; align-items: center; height: 40px; border: 1px solid var(--line); border-radius: 20px; background: #fff; overflow: hidden; }
+  .tempo button { width: 36px; height: 100%; font-size: 18px; color: var(--sub); }
+  .tempo button:hover { background: var(--track); color: var(--ink); }
+  .tempo input {
+    width: 32px; height: 100%; padding: 0; border: 0; background: none; text-align: right;
+    font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; appearance: textfield; -moz-appearance: textfield;
+  }
+  .tempo input::-webkit-inner-spin-button { display: none; }
+  .tempo label { padding: 0 6px 0 5px; font-size: 12px; color: var(--sub); }
+
+  .opt { display: flex; align-items: center; gap: 8px; color: var(--sub); font-size: 13px; }
+  .opt > svg { display: none; }
+  .seg { display: flex; height: 34px; padding: 3px; border-radius: 10px; background: var(--track); }
+  .seg label { position: relative; cursor: pointer; font-size: 13px; color: var(--sub); }
+  .seg input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .seg span { display: grid; place-items: center; height: 100%; padding: 0 11px; border-radius: 7px; white-space: nowrap; }
+  .seg label:hover span { color: var(--ink); }
+  .seg :checked + span { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(20 24 32 / .16); }
+  .seg .toggle { display: flex; align-items: center; gap: 7px; }
+  .toggle::before { content: ""; width: 12px; height: 4px; border-radius: 2px; background: #b9bec7; }
+  .seg :checked + .toggle::before { background: var(--hold); }
+  .bar button:focus-visible, .tempo:focus-within, .seg :focus-visible + span { outline: 2px solid var(--ink); outline-offset: 1px; }
+  .tempo button:focus-visible { outline: 0; background: var(--track); color: var(--ink); }
+
+  /* 악보 */
+  main { padding-bottom: 96px !important; }
+  #sheet { position: relative; margin: 0 calc(-1 * var(--pad)); }
+  h2 { display: flex; align-items: center; gap: 10px; margin: 60px var(--pad) 10px; font-size: 18px; letter-spacing: -.01em; break-after: avoid; }
+  #sheet > h2:first-child { margin-top: 36px; }
+  h2 small { padding: 3px 9px; border-radius: 99px; background: var(--track); color: var(--sub); font-size: 12px; font-weight: 500; letter-spacing: 0; }
+
+  .row, .skip { cursor: pointer; border-bottom: 1px solid var(--rule); }
+  .row {
+    position: relative; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); column-gap: calc(var(--g) * 1%);
+    padding: var(--row) var(--pad) calc(var(--row) - 4px); break-inside: avoid;
+  }
+  .skip { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; padding: 16px var(--pad); color: var(--sub); font-size: 14px; }
+  .row.active, .skip.active { background: var(--play-bg); border-radius: 12px; border-color: transparent; }
+  @media (hover: hover) { .row:not(.active):hover, .skip:not(.active):hover { background: #f4f5f6; border-radius: 12px; } }
+
+  .beat { display: grid; grid-template-columns: repeat(var(--d), minmax(0, 1fr)); }
+  .cell { text-align: center; position: relative; }
+  .syl { height: 1.6em; line-height: 1.45em; font-size: var(--syl); font-weight: 600; white-space: nowrap; }
+  .num { margin-top: 11px; height: var(--ring); font-size: var(--num); color: var(--faint); font-variant-numeric: tabular-nums; }
+  .num span, .dot span {
+    display: inline-grid; place-items: center; width: var(--ring); height: var(--ring); line-height: 1;
+    border: 1.5px solid transparent; border-radius: 50%;
+  }
+  .num span { margin: 0 -4px; }
+  .head .num span { border-color: #c3c7ce; }
+  .on .num { color: var(--ink); font-weight: 600; }
+  .on.head .num span { border-color: var(--ink); }
+
+  /* 음 길이 선 */
+  .hold .cell.h::after, .hold .cell.on::after {
+    content: ""; position: absolute; left: 0; right: 0; top: calc(var(--syl) * 1.6); height: 4px; background: var(--hold);
+  }
+  .hold .cell:not(.end)::after { right: -1px; }
+  .hold .cell.on::after { left: 16%; border-radius: 2px 0 0 2px; }
+  .hold .cell.end::after { right: 16%; border-radius: 0 2px 2px 0; }
+  .hold .cell.on.end::after { border-radius: 2px; }
+  /* 다음 박으로 이어지는 음: 박 사이 간격을 메움 */
+  .hold .cell.bridge::after { right: calc(-100% * var(--g) * var(--n) * var(--d) / (100 - (var(--n) - 1) * var(--g)) - 1px); }
+  /* 다음 줄로 이어지는 음: 줄 끝까지 나가고, 다음 줄도 끝에서 들어옴 */
+  .hold .cell.out::after { right: calc(-1 * var(--pad)); }
+  .hold .cell.h.in::after { left: calc(-1 * var(--pad)); }
+  .note { align-self: center; color: var(--sub); font-size: 13px; line-height: 1.5; }
+  .row .time { position: absolute; left: var(--pad); top: 4px; color: var(--sub); font-size: 11px; font-weight: 600; }
+  .row .check { grid-column: 1 / -1; color: var(--play-dark); font-size: 12px; }
+  .unsure .syl { text-decoration: underline dotted var(--play); text-underline-offset: 4px; }
+  .dense { --syl: 18px; --num: 12px; --ring: 20px; }
+  .copy { margin: 40px 0 0; color: var(--sub); font-size: 12px; }
+  .empty { padding: 48px 0; color: var(--sub); }
+
+  .measure { display: inline-flex; gap: 6px; }
+  .dot { display: inline-block; }
+  .dot span { border-color: #c3c7ce; color: var(--faint); font-size: 13px; }
+
+  /* 재생 중 */
+  #head { position: absolute; left: 0; top: 0; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--play); pointer-events: none; z-index: 1; }
+  #head::before { content: ""; position: absolute; left: -3px; top: -7px; width: 8px; height: 8px; border-radius: 50%; background: var(--play); }
+  .sing .syl { color: var(--play); }
+  .hold .row .cell.sing::after { background: var(--play); }
+  .row .cell.now .num span, .dot.now span { background: var(--play); border-color: var(--play); color: #fff; font-weight: 600; }
+
+  @media (max-width: 640px) {
+    :root { --g: 2; --syl: 17px; --num: 13px; --ring: 20px; --row: 18px; --pad: 10px; }
+    .wrap { padding: 0 16px; }
+    .top { padding-top: 24px; padding-bottom: 16px; }
+    h1 { font-size: 24px; }
+    .tip { margin-left: 0; width: 100%; }
+    .tip .key { display: none; }
+    .bar .wrap { gap: 8px; }
+    .transport { flex: 1; }
+    #play { flex: 1; width: auto; }
+    .bar .push { margin-left: 0; }
+    .opt > svg { display: block; }
+    .opt > .name { display: none; }
+    .opt { gap: 6px; margin-right: auto; }
+    .seg span { padding: 0 8px; }
+    .dense { --syl: 12px; --num: 9px; --ring: 13px; }
+    .syl { letter-spacing: -.04em; }
+    .num { margin-top: 9px; }
+    h2 { margin-top: 44px; font-size: 17px; }
+    .skip > span:first-child { width: 100%; }
+    .skip { gap: 10px 18px; }
+    .measure { gap: 4px; }
+    .dot span { font-size: 11px; }
+    .note { font-size: 12px; }
+  }
+  @media (max-width: 345px) { .opt > svg { display: none; } .seg span { padding: 0 6px; } }
+  @media print {
+    @page { size: A4; margin: 12mm; }
+    :root { --g: 3.2; --syl: 18px; --num: 13px; --ring: 20px; --row: 9px; --pad: 10px; }
+    body { background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .wrap { max-width: none; padding: 0 12px; }
+    .top { padding: 0 12px; }
+    main { padding-bottom: 0 !important; }
+    .bar, .tip, #head, .row .check { display: none !important; }
+    .unsure .syl { text-decoration: none; }
+    .copy { margin-top: 16px; }
+    .dense { --syl: 14px; --num: 10px; --ring: 15px; }
+    h2, #sheet > h2:first-child { margin-top: 24px; margin-bottom: 2px; font-size: 15px; }
+    .num { margin-top: 7px; }
+    .skip { padding-top: 8px; padding-bottom: 8px; }
+    .row.active, .skip.active { background: none; border-color: var(--rule); border-radius: 0; }
+    .sing .syl { color: inherit; }
+    .hold .row .cell.sing::after { background: var(--hold); }
+    .row .cell.now .num span, .dot.now span { background: none; color: inherit; border-color: transparent; font-weight: inherit; }
+    .row .cell.head.now .num span, .dot.now span { border-color: #c3c7ce; }
+    .row .cell.on.head.now .num span { border-color: var(--ink); }
+  }
+</style>
+</head>
+<body>
+<header class="wrap top">
+  <h1></h1>
+  <p class="by"></p>
+  <p class="tip">줄을 누르면 그 마디로 이동<span class="key"> · 스페이스바로 재생/일시정지</span></p>
+</header>
+<div class="bar">
+  <div class="wrap">
+    <div class="transport">
+      <button id="play" type="button">
+        <svg class="ic-play" width="12" height="14" viewBox="0 0 12 14" aria-hidden="true"><path d="M0 1.2v11.6a1 1 0 0 0 1.5.87l10-5.8a1 1 0 0 0 0-1.74l-10-5.8A1 1 0 0 0 0 1.2z"/></svg>
+        <svg class="ic-pause" width="12" height="14" viewBox="0 0 12 14" aria-hidden="true"><rect width="4" height="14" rx="1"/><rect x="8" width="4" height="14" rx="1"/></svg>
+        <span>재생</span>
+      </button>
+      <button id="restart" type="button" aria-label="처음으로" title="처음으로">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><rect x="1" y="1" width="2.5" height="14" rx="1"/><path d="M15 2.1v11.8a1 1 0 0 1-1.55.83L4.9 8.83a1 1 0 0 1 0-1.66l8.55-5.9A1 1 0 0 1 15 2.1z"/></svg>
+      </button>
+    </div>
+    <div class="tempo">
+      <button type="button" data-step="-1" aria-label="BPM 1 낮추기">−</button>
+      <input id="bpm" type="number" min="30" max="240" step="1" value="80" inputmode="numeric">
+      <label for="bpm">BPM</label>
+      <button type="button" data-step="1" aria-label="BPM 1 올리기">+</button>
+    </div>
+    <div class="opt push">
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8v12.4a.6.6 0 0 1-1 .45L3.6 11.5H1.5a1 1 0 0 1-1-1v-5a1 1 0 0 1 1-1h2.1L7 1.35a.6.6 0 0 1 1 .45z"/><path d="M10.5 5a4 4 0 0 1 0 6M12.5 2.8a7 7 0 0 1 0 10.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <span class="name">메트로놈</span>
+      <div class="seg" role="radiogroup" aria-label="메트로놈 소리">
+        <label><input type="radio" name="metro" value="all"><span>칸마다</span></label>
+        <label><input type="radio" name="metro" value="beat"><span>정박</span></label>
+        <label><input type="radio" name="metro" value="off"><span>끄기</span></label>
+      </div>
+    </div>
+    <div class="seg" role="radiogroup" aria-label="박 세는 방식">
+      <label><input type="radio" name="count" value="num"><span>1234</span></label>
+      <label><input type="radio" name="count" value="ea"><span>1e&amp;a</span></label>
+    </div>
+    <div class="seg">
+      <label title="음을 끄는 길이 표시"><input type="checkbox" id="hold"><span class="toggle">음 길이</span></label>
+    </div>
+  </div>
+</div>
+<main class="wrap"><div id="sheet"></div><p class="copy"></p></main>
+<script type="application/json" id="song-data"></script>
+<script>
+"use strict";
+const el = (tag, cls, text) => {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+};
+/* 박자표 → 한 마디의 박 수와 한 박의 길이. src/lib/song/time.ts와 같은 규칙 */
+function meterOf({ beats, unit }) {
+  if (unit === 8 && beats % 3 === 0) return { beats: beats / 3, quarters: 1.5 };
+  if (unit === 8) return { beats, quarters: 0.5 };
+  if (unit === 2) return { beats: beats * 2, quarters: 1 };
+  return { beats, quarters: 1 };
+}
+const label = (mode, i, div) => i === 0 ? "" : mode === "ea" && div === 4 ? ["", "e", "&", "a"][i] : String(i + 1);
+
+/* 재생 순서대로 놓인 칸들. start/len의 단위는 4분음표 = 1 */
+let timeline = [];
+let clicks = []; /* 메트로놈. 세기 2 = 마디 첫 박, 1 = 정박, 0 = 사이 칸 */
+let total = 0;
+
+function addSeg(el, row, quarters, note, beat, sub, dot) {
+  if (dot) {
+    /* 노래 없는 박: 표시는 하나, 소리는 네 칸 */
+    for (let i = 0; i < 4; i++) clicks.push({ at: total + quarters * i / 4, level: i ? 0 : beat === 0 ? 2 : 1 });
+  } else clicks.push({ at: total, level: sub ? 0 : beat === 0 ? 2 : 1 });
+  timeline.push({ el, row, start: total, len: quarters, note, dot });
+  total += quarters;
+}
+
+function build(song) {
+  const sheet = document.getElementById("sheet");
+  const timeText = t => t.beats + "/" + t.unit;
+  timeline = []; clicks = []; total = 0;
+  sheet.textContent = "";
+  document.title = song.title + " 박자 노트";
+  document.querySelector("h1").textContent = song.title;
+  document.querySelector(".by").textContent = [song.artist, song.credits, timeText(song.time) + "박자"].filter(Boolean).join(" · ");
+  document.querySelector(".copy").textContent = song.copyright || "";
+
+  const measures = song.items.filter(i => i.type === "measure");
+  const columns = Math.max(1, ...measures.map(m => m.beats.length));
+  const cells = Math.max(1, ...measures.map(m => m.beats.reduce((s, b) => s + b.div, 0)));
+  sheet.style.setProperty("--n", columns);
+  sheet.classList.toggle("dense", cells > 16);
+
+  const flat = [];
+  let note = null;
+  for (const item of song.items) {
+    const meter = meterOf(item.time || song.time);
+    if (item.type === "section") {
+      const h = el("h2", "", item.title);
+      if (item.note) h.append(el("small", "", item.note));
+      sheet.append(h);
+    } else if (item.type === "instrumental") {
+      const skip = el("div", "skip");
+      skip.append(el("span", "", (item.time ? timeText(item.time) + " " : "") + item.label + " " + item.count + "마디"));
+      note = null;
+      for (let m = 0; m < item.count; m++) {
+        const g = el("span", "measure");
+        for (let b = 0; b < meter.beats; b++) {
+          const dot = el("span", "dot");
+          dot.append(el("span", "", b + 1));
+          g.append(dot);
+          addSeg(dot, skip, meter.quarters, null, b, 0, true);
+        }
+        skip.append(g);
+      }
+      sheet.append(skip);
+    } else {
+      const row = el("div", "row");
+      if (item.time) row.append(el("span", "time", timeText(item.time)));
+      item.beats.forEach((beatData, b) => {
+        const beat = el("div", "beat"), div = beatData.div;
+        beat.style.setProperty("--d", div);
+        const blank = item.pickup && beatData.notes.every(n => n.kind === "rest");
+        let i = 0;
+        for (const n of beatData.notes) for (let k = 0; k < n.len; k++, i++) {
+          const on = n.kind === "note" && k === 0, hold = n.kind === "hold" || (n.kind === "note" && k > 0);
+          const cell = el("div", "cell" + (i === 0 ? " head" : "") + (on ? " on" : hold ? " h" : "") + (on && n.unsure ? " unsure" : ""));
+          cell.append(el("div", "syl", on ? n.text : ""));
+          const num = el("div", "num"), s = el("span", "", i === 0 ? b + 1 : "");
+          s.dataset.i = i;
+          s.dataset.div = div;
+          if (!blank) num.append(s);
+          cell.append(num);
+          beat.append(cell);
+          const kind = on ? "on" : hold ? "hold" : "rest";
+          flat.push([kind, cell]);
+          note = kind === "rest" ? null : on ? [cell] : note;
+          if (kind === "hold" && note) note.push(cell);
+          addSeg(cell, row, meter.quarters / div, note, b, i, false);
+        }
+        row.append(beat);
+      });
+      if (item.memo) {
+        const memo = el("div", "note", item.memo);
+        memo.style.gridColumn = item.beats.length < columns ? (item.beats.length + 1) + " / -1" : "1 / -1";
+        row.append(memo);
+      }
+      if (item.check) row.append(el("div", "check", "확인 필요: " + item.check));
+      sheet.append(row);
+    }
+  }
+  if (!timeline.length) sheet.append(el("p", "empty", "마디가 없습니다."));
+  flat.forEach(([kind, cell], k) => {
+    const next = flat[k + 1];
+    if (kind === "rest") return;
+    const beat = cell.parentNode, newRow = next && next[1].closest(".row") !== cell.closest(".row");
+    if (!next || next[0] !== "hold") cell.classList.add("end");
+    else if (newRow) { cell.classList.add("out"); next[1].classList.add("in"); }
+    else if (cell === beat.lastChild) cell.classList.add("bridge");
+  });
+}
+
+/* 설정은 곡마다 따로 저장 */
+const store = {
+  prefix: "beat-note:",
+  get(k) { try { return localStorage.getItem(this.prefix + k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(this.prefix + k, v); } catch {} },
+};
+function setCount(v, save = true) {
+  document.querySelectorAll(".num span").forEach(s => {
+    if (s.dataset.i !== "0") s.textContent = label(v, +s.dataset.i, +s.dataset.div);
+  });
+  document.querySelector(`input[name=count][value=${v}]`).checked = true;
+  if (save) store.set("count", v);
+}
+function setHold(on, save = true) {
+  document.getElementById("sheet").classList.toggle("hold", on);
+  document.getElementById("hold").checked = on;
+  if (save) store.set("hold", on ? "1" : "0");
+}
+document.querySelectorAll("input[name=count]").forEach(r => r.addEventListener("change", () => setCount(r.value)));
+document.getElementById("hold").addEventListener("change", e => setHold(e.target.checked));
+
+/* ---- 재생 ---- */
+const $ = id => document.getElementById(id);
+const sheet = $("sheet"), bar = document.querySelector(".bar");
+const head = el("div");
+head.id = "head";
+head.hidden = true;
+sheet.append(head);
+
+const BPM_MIN = 30, BPM_MAX = 240;
+let bpmDefault = 80;
+let beatQuarters = 1; /* BPM이 세는 한 박의 길이(4분음표 = 1) */
+const player = { playing: false, pos: 0, bpm: bpmDefault, t0: 0, p0: 0, seg: null, token: 0 };
+
+/* 1ms에 나아가는 길이(4분음표 = 1) */
+const speed = () => player.bpm * beatQuarters / 60000;
+function currentPos() {
+  if (!player.playing) return player.pos;
+  return player.p0 + Math.max(0, performance.now() - player.t0) * speed();
+}
+function clickAt(pos) {
+  let lo = 0, hi = clicks.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (clicks[mid].at < pos - 1e-6) lo = mid + 1; else hi = mid;
+  }
+  return lo;
+}
+/* 지금 위치를 기준점으로 다시 잡음: 재생 중 BPM이나 위치가 바뀌어도 튀지 않게 */
+function rebase(pos, lead = 0, keepClicks = false) {
+  player.pos = player.p0 = pos;
+  player.t0 = performance.now() + lead * 1000;
+  cancelClicks();
+  if (!keepClicks) metro.next = clickAt(pos);
+}
+
+/* ---- 메트로놈 ---- */
+/* 세기별 소리: 정박은 사이 칸보다 조금 크고 높게, 마디 첫 박은 거기서 살짝 더 */
+const CLICK = [
+  { gain: 0.30, freq: 900 },
+  { gain: 0.55, freq: 1250 },
+  { gain: 0.68, freq: 1600 },
+];
+const LOOKAHEAD = 0.15;
+const metro = { ctx: null, mode: "all", next: 0, queue: [], offset: null, timer: 0 };
+
+function click(ctx, time, level) {
+  const { gain, freq } = CLICK[level], osc = ctx.createOscillator(), g = ctx.createGain();
+  osc.type = "triangle";
+  osc.frequency.value = freq;
+  g.gain.setValueAtTime(0, time);
+  g.gain.linearRampToValueAtTime(gain, time + 0.001);
+  g.gain.exponentialRampToValueAtTime(0.0005, time + 0.06);
+  osc.connect(g).connect(ctx.destination);
+  osc.start(time);
+  osc.stop(time + 0.07);
+  return osc;
+}
+/* 스피커까지 걸리는 시간만큼 미리 울려서 화면과 귀로 듣는 소리를 맞춤 */
+function latency() {
+  const c = metro.ctx;
+  return c ? Math.min(0.4, c.outputLatency || c.baseLatency || 0) : 0;
+}
+function lead() { return 0.12 + latency(); }
+function cancelClicks() {
+  if (!metro.ctx) return;
+  const now = metro.ctx.currentTime;
+  for (const q of metro.queue) {
+    if (q.time <= now) continue;
+    q.osc.disconnect();
+    metro.next = Math.min(metro.next, q.n);
+  }
+  metro.queue = [];
+}
+function schedule() {
+  const { ctx } = metro;
+  if (!player.playing || !ctx || ctx.state !== "running" || !isFinite(player.t0)) return;
+  /* 화면 시계와 소리 시계의 차이. 천천히 따라가서 간격이 흔들리지 않게 함 */
+  const diff = ctx.currentTime - performance.now() / 1000;
+  metro.offset = metro.offset === null || Math.abs(diff - metro.offset) > 0.06 ? diff : metro.offset + (diff - metro.offset) * 0.02;
+  metro.queue = metro.queue.filter(q => q.time > ctx.currentTime - 0.1);
+  const now = ctx.currentTime, lat = latency();
+  for (; metro.next < clicks.length; metro.next++) {
+    const n = metro.next;
+    const time = player.t0 / 1000 + (clicks[n].at - player.p0) / speed() / 1000 + metro.offset - lat;
+    if (time > now + LOOKAHEAD) break;
+    if (time < now - 0.03) continue;
+    const level = clicks[n].level;
+    if (metro.mode === "off" || (metro.mode === "beat" && level === 0)) continue;
+    metro.queue.push({ n, time, osc: click(ctx, Math.max(time, now), level) });
+  }
+}
+const sleep = ms => new Promise(ok => setTimeout(ok, ms));
+async function audioReady() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  try {
+    metro.ctx = metro.ctx || new AC();
+    if (metro.ctx.state !== "running")
+      await Promise.race([metro.ctx.resume(), sleep(600)]);
+    /* 막 켜진 장치는 시계가 잠깐 멈칫함. 두 시계의 차이가 안정될 때까지 기다림(최대 1초) */
+    const drift = () => metro.ctx.currentTime - performance.now() / 1000;
+    for (let i = 0, calm = 0, last = drift(); i < 33 && calm < 5 && metro.ctx.state === "running"; i++) {
+      await sleep(30);
+      const d = drift();
+      calm = metro.ctx.currentTime > 0 && Math.abs(d - last) < 0.008 ? calm + 1 : 0;
+      last = d;
+    }
+  } catch {}
+}
+function setMetro(mode, save = true) {
+  metro.mode = ["all", "beat", "off"].includes(mode) ? mode : "all";
+  document.querySelector(`input[name=metro][value=${metro.mode}]`).checked = true;
+  if (player.playing && isFinite(player.t0)) cancelClicks();
+  if (save) store.set("metro", metro.mode);
+}
+function segAt(pos) {
+  let lo = 0, hi = timeline.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (timeline[mid].start <= pos) lo = mid; else hi = mid - 1;
+  }
+  return lo;
+}
+function followRow(row) {
+  const top = bar.getBoundingClientRect().height;
+  const target = row.getBoundingClientRect().top + scrollY - top - (innerHeight - top) * 0.28;
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  scrollTo({ top: Math.max(0, target), behavior: calm ? "auto" : "smooth" });
+}
+function show(pos, follow) {
+  const i = segAt(pos), seg = timeline[i], prev = player.seg;
+  if (seg !== prev) {
+    if (prev) { prev.el.classList.remove("now"); prev.row.classList.remove("active"); }
+    seg.el.classList.add("now");
+    seg.row.classList.add("active");
+    if (!prev || prev.note !== seg.note) {
+      if (prev && prev.note) prev.note.forEach(c => c.classList.remove("sing"));
+      if (seg.note) seg.note.forEach(c => c.classList.add("sing"));
+    }
+    if (follow && (!prev || prev.row !== seg.row)) followRow(seg.row);
+    player.seg = seg;
+  }
+  const base = sheet.getBoundingClientRect(), a = seg.el.getBoundingClientRect();
+  const next = timeline[i + 1], b = next && next.row === seg.row ? next.el.getBoundingClientRect() : null;
+  const end = b && Math.abs(b.top - a.top) < 2 ? b.left : a.right;
+  const x = a.left + (end - a.left) * Math.min(1, (pos - seg.start) / seg.len);
+  head.hidden = seg.dot; /* 연주 마디는 동그라미 표시만으로 충분 */
+  head.style.height = a.height + "px";
+  head.style.transform = `translate(${x - base.left}px, ${a.top - base.top}px)`;
+}
+function frame() {
+  if (!player.playing) return;
+  const pos = currentPos();
+  if (pos >= total) { setPlaying(false); seek(0, false); head.hidden = true; clearMarks(); return; }
+  show(pos, true);
+  requestAnimationFrame(frame);
+}
+function clearMarks() {
+  document.querySelectorAll(".now, .sing, .active").forEach(n => n.classList.remove("now", "sing", "active"));
+  player.seg = null;
+}
+async function setPlaying(on) {
+  if (on === player.playing || !timeline.length) return;
+  const token = ++player.token;
+  rebase(currentPos());
+  player.playing = on;
+  $("play").classList.toggle("on", on);
+  $("play").querySelector("span").textContent = on ? "일시정지" : "재생";
+  clearInterval(metro.timer);
+  if (!on) return;
+  player.t0 = Infinity; /* 소리 장치가 준비될 때까지 제자리 */
+  followRow(timeline[segAt(player.pos)].row);
+  requestAnimationFrame(frame);
+  await audioReady();
+  if (!player.playing || token !== player.token) return;
+  rebase(currentPos(), lead());
+  metro.offset = null;
+  metro.timer = setInterval(schedule, 25);
+  schedule();
+}
+function seek(pos, follow) {
+  rebase(pos, player.playing ? lead() : 0);
+  show(pos, follow);
+}
+function setBpm(v, save = true) {
+  v = Math.min(BPM_MAX, Math.max(BPM_MIN, Math.round(v) || bpmDefault));
+  if (v !== player.bpm) {
+    const wait = player.playing ? Math.max(0, (player.t0 - performance.now()) / 1000) : 0;
+    rebase(currentPos(), wait, true);
+  }
+  player.bpm = v;
+  $("bpm").value = v;
+  if (save) store.set("bpm", v);
+}
+
+$("play").addEventListener("click", () => setPlaying(!player.playing));
+$("restart").addEventListener("click", () => {
+  if (!timeline.length) return;
+  seek(0, false);
+  if (player.playing) followRow(timeline[0].row); else scrollTo({ top: 0 });
+});
+$("bpm").addEventListener("input", e => {
+  const v = +e.target.value;
+  if (v >= BPM_MIN && v <= BPM_MAX) setBpm(v);
+});
+$("bpm").addEventListener("change", e => setBpm(+e.target.value));
+$("bpm").addEventListener("keydown", e => { if (e.key === "Enter") e.target.blur(); });
+document.querySelectorAll(".tempo button").forEach(b =>
+  b.addEventListener("click", () => setBpm(player.bpm + +b.dataset.step)));
+sheet.addEventListener("click", e => {
+  const row = e.target.closest(".row, .skip");
+  if (row && timeline.some(s => s.row === row)) seek(timeline.find(s => s.row === row).start, player.playing);
+});
+document.addEventListener("keydown", e => {
+  if (e.code !== "Space" || e.target.closest("input, button")) return;
+  e.preventDefault();
+  setPlaying(!player.playing);
+});
+/* 마우스로 누른 버튼에 포커스가 남으면 스페이스바가 그 버튼을 다시 누르게 되므로 풀어 줌 */
+bar.addEventListener("pointerup", () => setTimeout(() => {
+  const a = document.activeElement;
+  if (a && a !== $("bpm") && bar.contains(a)) a.blur();
+}));
+addEventListener("resize", () => { if (player.seg && !player.playing) show(player.pos, false); });
+document.querySelectorAll("input[name=metro]").forEach(b => b.addEventListener("change", () => setMetro(b.value)));
+
+/* ---- 시작 ---- */
+function load(song) {
+  if (player.playing) setPlaying(false);
+  clearMarks();
+  build(song);
+  store.prefix = "beat-note:" + song.id + ":";
+  bpmDefault = song.bpm;
+  beatQuarters = meterOf(song.time).quarters;
+  player.pos = player.p0 = 0;
+  head.hidden = true;
+  sheet.append(head);
+  setCount(store.get("count") === "ea" ? "ea" : "num", false);
+  setHold(store.get("hold") !== "0", false);
+  setMetro(store.get("metro"), false);
+  setBpm(+(store.get("bpm") || bpmDefault), false);
+}
+const embedded = document.getElementById("song-data").textContent.trim();
+if (embedded) load(JSON.parse(embedded));
+else if (parent !== window) {
+  /* 사이트 안의 미리보기: 곡을 메시지로 받는다 */
+  addEventListener("message", e => {
+    if (e.source === parent && e.data && e.data.type === "beat-note:song") load(e.data.song);
+  });
+  parent.postMessage({ type: "beat-note:ready" }, "*");
+}
+</script>
+</body>
+</html>
