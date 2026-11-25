@@ -39,6 +39,8 @@ export type ReadScore = {
   title: string;
   credits: string;
   copyright: string;
+  /** 악보에 적힌 빠르기 */
+  bpm?: number;
   time: Time;
   measures: ReadMeasure[];
 };

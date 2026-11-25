@@ -7,9 +7,9 @@ export default function Home() {
       <p className="lead">
         노래 악보 PDF에서 가사와 음 길이를 읽어, 한 박을 네 칸으로 나눈 연습용 페이지를 만듭니다.
       </p>
-      <p className="notice">지금은 개발 중이라 PDF를 여는 것까지만 됩니다.</p>
+      <p className="notice">개발 중입니다. 자동 인식은 틀릴 수 있으니 결과를 원본과 비교해 주세요.</p>
       <p>
-        <Link href="/example/">직접 지은 노래로 만든 예시 보기</Link>
+        <Link href="/convert/">악보 변환하기</Link> · <Link href="/example/">직접 지은 노래로 만든 예시 보기</Link>
       </p>
 
       <h2>어떻게 만드나요</h2>

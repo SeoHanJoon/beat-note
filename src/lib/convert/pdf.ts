@@ -11,7 +11,7 @@ export class PdfError extends Error {
 }
 
 export const MAX_BYTES = 50 * 1024 * 1024;
-export const MAX_PAGES = 30;
+export const MAX_PAGES = 12;
 /** 인식에 쓰는 해상도. 흔한 스캔 해상도와 같다. */
 export const RENDER_DPI = 300;
 const MAX_PIXELS = 24_000_000;

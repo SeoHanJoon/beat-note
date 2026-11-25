@@ -2,6 +2,7 @@
 import { createCanvas } from "@napi-rs/canvas";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { toGray } from "../../src/lib/convert/gray.ts";
 import { openPdf, renderScale, type PdfjsFiles } from "../../src/lib/convert/pdf.ts";
 import type { Gray } from "../../src/lib/reader/types.ts";
 
@@ -9,12 +10,6 @@ const load = async (): Promise<PdfjsFiles> => ({
   pdfjs: (await import("pdfjs-dist/legacy/build/pdf.mjs")) as PdfjsFiles["pdfjs"],
   base: join(import.meta.dirname, "..", "..", "public", "vendor", "pdfjs") + "/",
 });
-
-export function toGray(rgba: Uint8ClampedArray, width: number, height: number): Gray {
-  const data = new Uint8Array(width * height);
-  for (let i = 0; i < data.length; i++) data[i] = (rgba[i * 4]! * 299 + rgba[i * 4 + 1]! * 587 + rgba[i * 4 + 2]! * 114) / 1000;
-  return { width, height, data };
-}
 
 export async function renderPdf(path: string): Promise<Gray[]> {
   const pdf = await openPdf(new Uint8Array(readFileSync(path)), load);

@@ -87,5 +87,5 @@ export const badPdfs: [name: string, problem: string, data: () => Uint8Array<Arr
   ["글 파일", "not-pdf", () => new Uint8Array(Buffer.from("악보가 아닙니다"))],
   ["PNG", "not-pdf", () => new Uint8Array(Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"))],
   ["빈 파일", "not-pdf", () => new Uint8Array()],
-  ["31쪽", "too-many-pages", () => makePdf({ pages: 31 })],
+  ["13쪽", "too-many-pages", () => makePdf({ pages: 13 })],
 ];

@@ -1,4 +1,5 @@
 import type { Time } from "../song/types.ts";
+import { readHeader } from "./header.ts";
 import { alignSyllables, dashesOf, findRows, readRow } from "./lyrics.ts";
 import { isHangul, type Ocr } from "./ocr.ts";
 import { findBarlines, splitMeasures, type MeasureSpan } from "./bars.ts";
@@ -150,6 +151,7 @@ export async function readScore(pages: Gray[], { ocr, onProgress }: ReadOptions 
   if (ocr) await readLyrics(systems, drafts, lyrics, ocr, onProgress);
 
   const score = emptyScore();
+  if (ocr) Object.assign(score, await readHeader([...new Map(systems.map((s) => [s.page, s.sheet])).values()], ocr));
   score.time = drafts[0]?.time ?? score.time;
   score.measures = drafts.map((d, i): ReadMeasure => ({
     page: d.system.page,

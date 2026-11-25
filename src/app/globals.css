@@ -207,3 +207,31 @@ a:focus-visible {
   font-size: 13px;
   text-align: center;
 }
+
+.button.plain {
+  border: 1px solid #c3c7ce;
+  background: none;
+  color: var(--ink);
+}
+
+.progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 16px;
+}
+
+.progress p {
+  margin: 0;
+}
+
+.progress progress {
+  flex: 1 1 160px;
+  height: 10px;
+  accent-color: var(--accent);
+}
+
+.summary {
+  margin-top: 16px;
+}
