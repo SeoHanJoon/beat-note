@@ -22,3 +22,9 @@ const copyMatching = (dir: string, pattern: RegExp) => {
 };
 copyMatching("standard_fonts", /^(Foxit.*\.pfb|LICENSE_FOXIT)$/);
 copyMatching("wasm", /^(jbig2|openjpeg|qcms)|^LICENSE_(?!.*QUICKJS)/);
+
+// ONNX Runtime Web: 단일 스레드 WASM만 쓴다.
+const ortFrom = join(root, "node_modules", "onnxruntime-web");
+const ortTo = join(root, "public", "vendor", "ort");
+mkdirSync(ortTo, { recursive: true });
+for (const name of ["ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm"]) cpSync(join(ortFrom, "dist", name), join(ortTo, name));
