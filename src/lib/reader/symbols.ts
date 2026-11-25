@@ -160,13 +160,29 @@ function findOpenHeads(region: Region, staff: Staff): Head[] {
       for (const dy of [0, -Math.round(space * 0.1), Math.round(space * 0.1)]) {
         const y = Math.round(rowY + dy);
         if (region.at(x, y) || region.at(x - 1, y) || region.at(x + 1, y)) continue;
+        // 네 방향이 막혀 있지 않으면 머리가 아니다(대부분 여기서 끝난다).
+        const reach = Math.ceil(space);
+        const blocked = (dx: number, dy2: number) => {
+          let i = (y - region.y0) * region.width + (x - region.x0);
+          const step = dy2 * region.width + dx;
+          for (let k = 0; k < reach; k++) {
+            i += step;
+            if (region.black[i]) return true;
+          }
+          return false;
+        };
+        if (!blocked(0, 1) || !blocked(0, -1) || !blocked(1, 0) || !blocked(-1, 0)) continue;
+        let misses = 0;
         let hits = 0, sumX = 0, left = 0, right = 0, up = 0, down = 0;
         for (const angle of rays) {
           const cos = Math.cos(angle), sin = Math.sin(angle);
           let r = 1;
           const limit = space * 1.0;
           while (r < limit && !region.at(Math.round(x + cos * r), Math.round(y + sin * r))) r++;
-          if (r >= limit) continue;
+          if (r >= limit) {
+            if (++misses > 3) break;
+            continue;
+          }
           // 둘레 밖은 다시 희다.
           let t = r;
           while (t < r + space * 0.8 && region.at(Math.round(x + cos * t), Math.round(y + sin * t))) t++;
@@ -548,24 +564,41 @@ export function readSymbols(clean: Binary, staff: Staff, bars: { x0: number; x1:
 
   // 음표나 빔에 닿은 쉼표: 음표를 지우고 남은 조각에서 찾는다.
   const rest = leftover(region, notes, space);
+  const pieces: Blob[] = [];
   for (const b of rest.blobs) {
     const yMid = (b.y0 + b.y1) / 2;
     if (yMid < lines[0]! - space * 0.6 || yMid > lines[4]! + space * 0.6) continue;
     if (times.some((t) => b.x0 < t.x1 && b.x1 > t.x) || b.x0 < start) continue;
     // 꼬리의 조각은 기둥 바로 오른쪽에 있다.
     if (notes.some((n) => n.stem && !n.beamLeft && !n.beamRight && n.beams > 0 && b.x0 - n.stem.x1 < space * 0.4 && b.x1 > n.stem.x0 && b.y0 < n.stem.y1 + space * 0.5 && b.y1 > n.stem.y0 - space * 0.5)) continue;
-    let value = classifyRest(rest, b, staff);
+    const value = classifyRest(rest, b, staff);
     if (!value || value <= 2) {
-      // 쉼표의 일부일 수 있는 조각
-      const w = b.x1 - b.x0, h = b.y1 - b.y0;
-      const long = longestColumn(rest, b);
-      const accidental = countHoles(rest, b, 3) > 0 || (long.run > space * 1.6 && Math.abs((long.x - b.x0) / w - 0.5) > 0.25);
-      if (accidental || h < space * 0.8 || h > space * 3.2 || w > space * 1.5 || w < space * 0.25 || b.area < space * space * 0.2) continue;
-      if (free.some((f) => f.x0 === b.x0 && f.y0 === b.y0 && f.area === b.area)) continue;
-      value = 0;
+      pieces.push(b);
+      continue;
     }
     if (rests.some((o) => o.box.x0 < b.x1 && o.box.x1 > b.x0 && o.box.y0 < b.y1 && o.box.y1 > b.y0)) continue;
     rests.push({ kind: "rest", x: (b.x0 + b.x1) / 2, y: yMid, value, dots: 0, outside: false, doubtful: true, box: { x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1 } });
+  }
+
+  // 음표에 겹쳐 조각난 쉼표일 수 있는 것: 합이 모자랄 때만 쓴다.
+  const groups: Blob[][] = [];
+  for (const b of pieces.sort((p, q) => p.x0 - q.x0)) {
+    const w = b.x1 - b.x0, h = b.y1 - b.y0;
+    if (b.area < space * space * 0.03 || w > space * 1.6 || h > space * 3.2) continue;
+    // 온전히 남은 덩어리(변화표 등)는 쉼표로 읽히지 않은 것이므로 뺀다.
+    if (free.some((f) => f.x0 === b.x0 && f.y0 === b.y0 && f.area === b.area)) continue;
+    const long = longestColumn(rest, b);
+    if (countHoles(rest, b, 3) > 0 || (long.run > space * 1.6 && Math.abs((long.x - b.x0) / w - 0.5) > 0.25)) continue;
+    const last = groups.at(-1);
+    if (last && b.x0 - Math.max(...last.map((o) => o.x1)) < space * 0.3) last.push(b);
+    else groups.push([b]);
+  }
+  for (const group of groups) {
+    const box = { x0: Math.min(...group.map((b) => b.x0)), y0: Math.min(...group.map((b) => b.y0)), x1: Math.max(...group.map((b) => b.x1)), y1: Math.max(...group.map((b) => b.y1)) };
+    const w = box.x1 - box.x0, h = box.y1 - box.y0, area = group.reduce((t, b) => t + b.area, 0);
+    if (h < space * 0.8 || h > space * 3.4 || w < space * 0.25 || w > space * 1.7 || area < space * space * 0.2) continue;
+    if (rests.some((o) => o.box.x0 < box.x1 && o.box.x1 > box.x0 && o.box.y0 < box.y1 && o.box.y1 > box.y0)) continue;
+    rests.push({ kind: "rest", x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2, value: 0, dots: 0, outside: false, doubtful: true, box });
   }
 
   // 점: 머리나 쉼표의 오른쪽

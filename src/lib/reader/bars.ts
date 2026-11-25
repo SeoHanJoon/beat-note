@@ -59,7 +59,9 @@ function findStrokes(image: Binary, clean: Binary, staff: Staff): Stroke[] {
       let run = 0;
       for (let y = Math.round(lines[0]! + shift - space * 0.8); y <= Math.round(lines[4]! + shift + space * 0.8); y++) {
         run = y >= 0 && y < height && clean.data[y * width + x] ? run + 1 : 0;
-        if (run > space * 0.36) return false;
+        // 머리와 빔은 기둥의 끝에 붙는다. 가운데에 닿은 것은 쉼표나 꼬리일 수 있어 더 크게 닿아야 한다.
+        const middle = y - run > lines[0]! + shift + space * 0.6 && y < lines[4]! + shift - space * 0.6;
+        if (run > space * (middle ? 0.6 : 0.36)) return false;
       }
     }
     return true;
