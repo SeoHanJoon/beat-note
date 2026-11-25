@@ -1,8 +1,12 @@
-import { findBlobs, type Binary, type Blob } from "./image.ts";
+import { extent, findBlobs, type Binary, type Blob } from "./image.ts";
 import type { Staff } from "./staff.ts";
 
 /** 음표 머리 */
-export type Head = { x: number; y: number; x0: number; x1: number; open: boolean; whole: boolean };
+export type Head = {
+  x: number; y: number; x0: number; x1: number; open: boolean; whole: boolean;
+  /** 오선과 겹쳐 지워진 테두리를 있다고 보고 찾은 머리 */
+  patched?: true;
+};
 
 /** 기둥 하나에 달린 음(화음은 하나로 본다) */
 export type NoteMark = {
@@ -171,14 +175,33 @@ function findOpenHeads(region: Region, staff: Staff): Head[] {
           }
           return false;
         };
-        if (!blocked(0, 1) || !blocked(0, -1) || !blocked(1, 0) || !blocked(-1, 0)) continue;
-        let misses = 0;
-        let hits = 0, sumX = 0, left = 0, right = 0, up = 0, down = 0;
+        if (!blocked(1, 0) || !blocked(-1, 0)) continue;
+        let misses = 0, real = 0;
+        // 칸 가운데의 머리는 위아래 테두리가 오선과 겹쳐 지워졌을 수 있다.
+        const offset = (((y - base - staff.shift(x)) / space) % 1 + 1) % 1;
+        const inSpace = Math.abs(offset - 0.5) < 0.2;
+        let hits = 0, sumX = 0, thickLeft = 0, thickRight = 0, left = 0, right = 0, up = 0, down = 0;
         for (const angle of rays) {
           const cos = Math.cos(angle), sin = Math.sin(angle);
           let r = 1;
           const limit = space * 1.0;
-          while (r < limit && !region.at(Math.round(x + cos * r), Math.round(y + sin * r))) r++;
+          let erased = false;
+          while (r < limit && !region.at(Math.round(x + cos * r), Math.round(y + sin * r))) {
+            if (inSpace && Math.abs(sin) > 0.7 && Math.abs(sin * r) > space * 0.4) {
+              const line = (y + sin * r - base - staff.shift(x)) / space;
+              if (line > -0.1 && line < 4.1 && Math.abs(line - Math.round(line)) * space < staff.thick / 2 + 1) {
+                erased = true;
+                break;
+              }
+            }
+            r++;
+          }
+          if (erased) {
+            hits++;
+            if (Math.abs(angle - Math.PI / 2) < 1e-6) down = r;
+            else if (Math.abs(angle - Math.PI * 1.5) < 1e-6) up = r;
+            continue;
+          }
           if (r >= limit) {
             if (++misses > 3) break;
             continue;
@@ -187,17 +210,26 @@ function findOpenHeads(region: Region, staff: Staff): Head[] {
           let t = r;
           while (t < r + space * 0.8 && region.at(Math.round(x + cos * t), Math.round(y + sin * t))) t++;
           hits++;
+          real++;
           sumX += cos * r;
-          if (angle === 0) right = t;
-          else if (Math.abs(angle - Math.PI) < 1e-6) left = t;
+          if (angle === 0) [right, thickRight] = [t, t - r];
+          else if (Math.abs(angle - Math.PI) < 1e-6) [left, thickLeft] = [t, t - r];
           else if (Math.abs(angle - Math.PI / 2) < 1e-6) down = t;
           else if (Math.abs(angle - Math.PI * 1.5) < 1e-6) up = t;
         }
-        if (hits < 21) continue;
+        if (hits < 21 || real < 15) continue;
         const w = left + right, h = up + down;
+        if (real < 21) {
+          // 테두리 일부가 지워진 머리: 양옆이 두껍고, 온음표라면 다른 기호에 붙지 않아야 한다.
+          if (Math.abs(left - right) > space * 0.35) continue;
+          const half = w < space * 1.35;
+          if (!half && Math.min(thickLeft, thickRight) < space * 0.26) continue;
+          const sides = [x - left + 2, x + right - 2].map((sx) => region.blobs[region.labelAt(Math.round(sx), y) - 1]);
+          if (!half && sides.some((b) => !b || b.y1 - b.y0 > space * 1.4 || b.x1 - b.x0 > space * 2.2 || b.area < space * space * 0.15)) continue;
+        }
         if (w < space * 1.0 || w > space * 2.1 || h < space * 0.75 || h > space * 1.35) continue;
         const score = hits - Math.abs(sumX) / space - Math.abs(left - right) / space - Math.abs(dy) / space - Math.abs(up - down) / space;
-        found.push({ x: x + (right - left) / 2, y: rowY, x0: x - left, x1: x + right, open: true, whole: false, score });
+        found.push({ x: x + (right - left) / 2, y: rowY, x0: x - left, x1: x + right, open: true, whole: false, score, ...(real < 21 ? { patched: true as const } : {}) });
       }
     }
   }
@@ -412,6 +444,26 @@ function leftover(region: Region, notes: NoteMark[], space: number): Region {
   };
 }
 
+/** 덧줄을 지운 영역. 덧줄에 걸린 빈 머리의 구멍을 찾는 데만 쓴다. */
+function withoutLedgers(region: Region, staff: Staff): Region {
+  const { space, thick, lines } = staff;
+  const { width, height, x0, y0 } = region;
+  const black = region.black.slice();
+  const limit = Math.max(4, thick * 2 + 1);
+  for (let k = 1; k <= 4; k++)
+    for (const line of [lines[0]! - k * space, lines[4]! + k * space])
+      for (let x = 0; x < width; x++) {
+        const center = Math.round(line + staff.shift(x + x0)) - y0;
+        const d = [0, -1, 1].find((e) => center + e >= 0 && center + e < height && black[(center + e) * width + x]);
+        if (d === undefined) continue;
+        let top = center + d, bottom = center + d;
+        while (top > 0 && black[(top - 1) * width + x]) top--;
+        while (bottom < height - 1 && black[(bottom + 1) * width + x]) bottom++;
+        if (bottom - top + 1 <= limit) for (let y = top; y <= bottom; y++) black[y * width + x] = 0;
+      }
+  return { ...region, black, at: (x, y) => x >= x0 && y >= y0 && x < x0 + width && y < y0 + height && black[(y - y0) * width + (x - x0)] === 1 };
+}
+
 /** 왼쪽이 두 번 패인 숫자 3의 모양 */
 function looksLikeThree(region: Region, b: Blob): boolean {
   const w = b.x1 - b.x0, h = b.y1 - b.y0;
@@ -442,7 +494,16 @@ function hasLedger(clean: Binary, staff: Staff, head: Head): boolean {
   // 머리에서 오선 쪽으로 가장 가까운 덧줄
   const steps = Math.floor(Math.max(above, below) / space + 0.2);
   const y = Math.round(above > 0 ? lines[0]! + shift - steps * space : lines[4]! + shift + steps * space);
-  const dark = (x: number) => [-2, -1, 0, 1, 2].some((d) => clean.data[(y + d) * clean.width + Math.round(x)] === 1);
+  const dark = (px: number) => {
+    const x = Math.round(px);
+    const at = (yy: number) => clean.data[yy * clean.width + x] === 1;
+    const d = [0, -1, 1, -2, 2].find((k) => at(y + k));
+    if (d === undefined) return false;
+    let top = y + d, bottom = y + d;
+    while (at(top - 1)) top--;
+    while (at(bottom + 1)) bottom++;
+    return bottom - top + 1 <= Math.max(4, staff.thick * 2 + 1);
+  };
   return dark(head.x0 - space * 0.15) && dark(head.x1 + space * 0.15);
 }
 
@@ -470,7 +531,12 @@ export function readSymbols(clean: Binary, staff: Staff, bars: { x0: number; x1:
   const times: TimeMark[] = [];
   const mid = (b: Blob) => (b.y0 + b.y1) / 2 - staff.shift(b.x0);
   const headLabels = new Set(filled.map((h) => region.labelAt(Math.round(h.x), Math.round(h.y))));
-  const loose = region.blobs.filter((b, i) => !headLabels.has(i + 1) && b.x0 >= start - 1 && !bars.some((bar) => b.x0 <= bar.x1 && b.x1 >= bar.x0));
+  // 붙어 있는 굵은 숫자 안을 머리로 볼 수 있다.
+  const boldDigits = (b: Blob) => {
+    const w = (b.x1 - b.x0) / space, h = (b.y1 - b.y0) / space;
+    return w > 1.45 && w < 2.3 && longestColumn(region, b).run < space * 2.6 && h > 3.8 && h < 4.5 && b.area > (b.x1 - b.x0) * (b.y1 - b.y0) * 0.42 && Math.abs((b.y0 + b.y1) / 2 - staff.shift(b.x0) - lines[2]!) < space * 0.3;
+  };
+  const loose = region.blobs.filter((b, i) => (!headLabels.has(i + 1) || boldDigits(b)) && b.x0 >= start - 1 && !bars.some((bar) => b.x0 <= bar.x1 && b.x1 >= bar.x0));
   const tall = (b: Blob, lo: number, hi: number) => b.y1 - b.y0 >= space * lo && b.y1 - b.y0 <= space * hi;
   const wide = (b: Blob, lo: number, hi: number) => b.x1 - b.x0 >= space * lo && b.x1 - b.x0 <= space * hi;
   const timeBlobs = new Set<Blob>();
@@ -491,8 +557,18 @@ export function readSymbols(clean: Binary, staff: Staff, bars: { x0: number; x1:
     }
   }
 
+  for (let i = filled.length - 1; i >= 0; i--) if (times.some((t) => filled[i]!.x > t.x - 2 && filled[i]!.x < t.x1 + 2)) filled.splice(i, 1);
+  // 박자표는 마디의 맨 앞에만 온다. 앞에 음표가 있으면 쉼표를 잘못 본 것이다.
+  for (let i = times.length - 1; i >= 0; i--) {
+    const t = times[i]!;
+    const from = bars.reduce((x, b) => (b.x1 <= t.x && b.x1 > x ? b.x1 : x), start);
+    if (filled.some((h) => h.x > from && h.x < t.x)) {
+      for (const b of [...timeBlobs]) if (b.x0 < t.x1 && b.x1 > t.x) timeBlobs.delete(b);
+      times.splice(i, 1);
+    }
+  }
   const inTime = (h: Head) => times.some((t) => h.x > t.x - 2 && h.x < t.x1 + 2);
-  const open = findOpenHeads(region, staff).filter((h) => okY(h) && !inTime(h) && hasLedger(clean, staff, h) && filled.every((f) => Math.abs(f.x - h.x) > space * 0.9 || Math.abs(f.y - h.y) > space * 0.7));
+  const open = findOpenHeads(withoutLedgers(region, staff), staff).filter((h) => okY(h) && !inTime(h) && hasLedger(clean, staff, h) && filled.every((f) => Math.abs(f.x - h.x) > space * 0.9 || Math.abs(f.y - h.y) > space * 0.7));
 
   type Link = { head: Head; stem: Stem; dir: 1 | -1 };
   const links: Link[] = [];
@@ -519,6 +595,14 @@ export function readSymbols(clean: Binary, staff: Staff, bars: { x0: number; x1:
   for (let i = links.length - 1; i >= 0; i--) if (links[i]!.head.open && filledStems.has(links[i]!.stem)) links.splice(i, 1);
 
   const beamed = filledStems;
+  const inFlag = (h: Head) =>
+    links.some((l) => !l.head.open && Math.abs(h.x - (l.stem.x0 + l.stem.x1) / 2) < space * 0.95 && h.y > l.stem.y0 - space * 0.3 && h.y < l.stem.y1 + space * 0.3 && Math.abs(h.y - l.head.y) > space * 0.8);
+  // 테두리가 지워진 2분음표: 기둥이 머리에서 시작하고 가까이에 다른 머리가 없어야 한다.
+  const badPatch = ({ head, stem, dir }: Link) =>
+    !!head.patched && (Math.abs((dir === 1 ? stem.y1 : stem.y0) - head.y) > space * 0.55 || filled.some((f) => Math.abs(f.x - head.x) < space * 1.5) || stems.some((o) => o !== stem && Math.abs((o.x0 + o.x1) / 2 - head.x) < space * 1.1));
+  for (let i = links.length - 1; i >= 0; i--) if (links[i]!.head.open && (inFlag(links[i]!.head) || badPatch(links[i]!))) links.splice(i, 1);
+  for (let i = bare.length - 1; i >= 0; i--) if (bare[i]!.open && inFlag(bare[i]!)) bare.splice(i, 1);
+
   const notes: NoteMark[] = [];
   for (const stem of stems)
     for (const dir of [1, -1] as const) {
@@ -539,9 +623,19 @@ export function readSymbols(clean: Binary, staff: Staff, bars: { x0: number; x1:
       notes.push({ kind: "note", x, y: key.y, dir, open: isOpen, whole: false, beams, beamLeft, beamRight, dots: 0, heads: group, stem });
       used.add(region.labelAt(Math.round((stem.x0 + stem.x1) / 2), Math.round((stem.y0 + stem.y1) / 2)));
     }
+  // 테두리가 지워진 온음표는 마디에 혼자 있을 때만 인정한다.
+  const span = (x: number) => [bars.reduce((m, b) => (b.x1 < x ? Math.max(m, b.x1) : m), start), bars.reduce((m, b) => (b.x0 > x ? Math.min(m, b.x0) : m), Infinity)] as const;
+  for (let i = bare.length - 1; i >= 0; i--) {
+    const h = bare[i]!;
+    if (!h.patched) continue;
+    const [from, to] = span(h.x);
+    if (notes.some((n) => n.x > from && n.x < to) || filled.some((f) => f.x > from && f.x < to)) bare.splice(i, 1);
+  }
   for (const head of bare) {
     // 기둥이 없는 빈 머리는 온음표
     const blob = region.blobs[region.labelAt(Math.round(head.x0 + 1), Math.round(head.y)) - 1];
+    const right = region.labelAt(Math.round(head.x1 - 1), Math.round(head.y));
+    if (!head.patched && (!blob || region.labelAt(Math.round(head.x0 + 1), Math.round(head.y)) !== right)) continue;
     if (!blob || blob.y1 - blob.y0 > space * 1.7) continue;
     if (head.y < lines[0]! - space * 3.2 || head.y > lines[4]! + space * 3.2) continue;
     if (head.open && head.x1 - head.x0 > space * 1.3) notes.push({ kind: "note", x: head.x, y: head.y, dir: 0, open: true, whole: true, beams: 0, beamLeft: false, beamRight: false, dots: 0, heads: [{ ...head, whole: true }] });
@@ -594,7 +688,7 @@ export function readSymbols(clean: Binary, staff: Staff, bars: { x0: number; x1:
     else groups.push([b]);
   }
   for (const group of groups) {
-    const box = { x0: Math.min(...group.map((b) => b.x0)), y0: Math.min(...group.map((b) => b.y0)), x1: Math.max(...group.map((b) => b.x1)), y1: Math.max(...group.map((b) => b.y1)) };
+    const box = extent(group);
     const w = box.x1 - box.x0, h = box.y1 - box.y0, area = group.reduce((t, b) => t + b.area, 0);
     if (h < space * 0.8 || h > space * 3.4 || w < space * 0.25 || w > space * 1.7 || area < space * space * 0.2) continue;
     if (rests.some((o) => o.box.x0 < box.x1 && o.box.x1 > box.x0 && o.box.y0 < box.y1 && o.box.y1 > box.y0)) continue;
@@ -625,9 +719,14 @@ export function readSymbols(clean: Binary, staff: Staff, bars: { x0: number; x1:
     if (n.heads.length > 1) n.dots = Math.min(n.dots, n.dots >= n.heads.length ? Math.round(n.dots / n.heads.length) : 1);
   }
 
+  /** 숫자는 빔(기둥의 끝)이나 머리 가까이에 있다. */
+  const nearStemTip = (b: Blob) => {
+    const x = (b.x0 + b.x1) / 2, y = (b.y0 + b.y1) / 2;
+    return notes.some((n) => n.stem && Math.abs(n.x - x) < space * 2.2 && (y < n.stem.y0 + space ? n.stem.y0 - y < space * 4.4 : Math.abs(n.stem.y1 - y) < space * 2));
+  };
   // 셋잇단 숫자 후보: 오선 밖의 작은 숫자 모양
   const threes = free
-    .filter((b) => tall(b, 0.75, 1.8) && wide(b, 0.35, 1.3) && (b.y1 < lines[0]! + space * 0.5 || b.y0 > lines[4]! - space * 0.5) && looksLikeThree(region, b))
+    .filter((b) => tall(b, 0.75, 1.8) && wide(b, 0.35, 1.3) && (b.y1 < lines[0]! + space * 1.6 || b.y0 > lines[4]! - space * 1.6) && nearStemTip(b) && looksLikeThree(region, b))
     .map((b) => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }));
 
   const marks: Mark[] = [...notes, ...rests].sort((a, b) => a.x - b.x);

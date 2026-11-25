@@ -1,4 +1,4 @@
-import { findBlobs, type Blob } from "./image.ts";
+import { extent, findBlobs, type Blob } from "./image.ts";
 import { type Ocr } from "./ocr.ts";
 import type { Staff } from "./staff.ts";
 import type { Gray } from "./types.ts";
@@ -27,7 +27,7 @@ function boxesIn(page: Page, y0: number, y1: number): { x0: number; y0: number; 
     const all = blobs.filter((b) => (b.y0 + b.y1) / 2 > row.y0 - height * 0.15 && (b.y0 + b.y1) / 2 < row.y1 + height * 0.15).sort((a, b) => a.x0 - b.x0);
     let part: Blob[] = [], right = -Infinity;
     const flush = () => {
-      if (part.length) out.push({ x0: Math.min(...part.map((b) => b.x0)), x1: Math.max(...part.map((b) => b.x1)), y0: Math.min(...part.map((b) => b.y0)), y1: Math.max(...part.map((b) => b.y1)), blobs: part });
+      if (part.length) out.push({ ...extent(part), blobs: part });
       part = [];
     };
     for (const b of all) {

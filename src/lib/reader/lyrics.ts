@@ -1,4 +1,4 @@
-import { findBlobs, type Blob } from "./image.ts";
+import { extent, findBlobs, type Blob } from "./image.ts";
 import { isHangul, type Ocr, type OcrChar } from "./ocr.ts";
 import type { Staff } from "./staff.ts";
 import type { Gray } from "./types.ts";
@@ -26,7 +26,7 @@ export function findRows(place: Place, nextTop: number | undefined, taken: { x0:
 
   const ink = new Float64Array(limit - y0 + 1);
   for (const b of blobs) for (const p of b.pixels) ink[Math.floor(p / sheet.image.width) - y0]!++;
-  const peak = Math.max(...ink);
+  const peak = ink.reduce((m, v) => Math.max(m, v), 0);
   const bands: [number, number][] = [];
   for (let y = 0, start = -1; y <= ink.length; y++) {
     const on = y < ink.length && ink[y]! > Math.max(0, peak * 0.015);
@@ -61,7 +61,10 @@ export function findRows(place: Place, nextTop: number | undefined, taken: { x0:
     for (let k = 0; k < pieces; k++) {
       const top = cuts[k]! + y0, bottom = cuts[k + 1]! + y0;
       const mine = blobs.filter((o) => (o.y0 + o.y1) / 2 >= top && (o.y0 + o.y1) / 2 < bottom);
-      if (mine.length) rows.push({ y0: Math.min(...mine.map((o) => o.y0)), y1: Math.max(...mine.map((o) => o.y1)), blobs: mine });
+      if (mine.length) {
+        const box = extent(mine);
+        rows.push({ y0: box.y0, y1: box.y1, blobs: mine });
+      }
     }
   }
   // 오선에 가까운 줄부터 이어지는 만큼만. 다음 단의 화음 이름은 다음 오선에 더 가깝다.
@@ -96,7 +99,10 @@ export function chunksOf(row: LyricRow): { x0: number; x1: number; blobs: Blob[]
       last.blobs.push(b);
     } else chunks.push({ x0: b.x0, x1: b.x1, blobs: [b] });
   }
-  return chunks.filter((c) => Math.max(...c.blobs.map((b) => b.y1)) - Math.min(...c.blobs.map((b) => b.y0)) > em * 0.42);
+  return chunks.filter((c) => {
+    const box = extent(c.blobs);
+    return box.y1 - box.y0 > em * 0.42;
+  });
 }
 
 /** 앞 글자를 끌라는 표시(음절 사이의 가로줄)의 가운데 x */
