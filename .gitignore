@@ -1,0 +1,32 @@
+# 의존성, 빌드 결과
+node_modules/
+.next/
+out/
+coverage/
+next-env.d.ts
+*.tsbuildinfo
+
+# 환경변수 (로컬 검증용 악보 경로 등)
+.env
+.env.*
+
+# 저작권이 있는 악보, 변환 결과, 화면 캡처가 커밋되지 않도록 형식 전체를 막는다.
+# 직접 만든 시험 악보나 화면 자료가 필요해지면 그 파일의 경로만 ! 로 예외를 둔다.
+*.[pP][dD][fF]
+*.[hH][tT][mM]
+*.[hH][tT][mM][lL]
+*.[pP][nN][gG]
+*.[jJ][pP][gG]
+*.[jJ][pP][eE][gG]
+*.[wW][eE][bB][pP]
+*.[gG][iI][fF]
+*.[hH][eE][iI][cC]
+*.[tT][iI][fF]
+*.[tT][iI][fF][fF]
+*.[mM][xX][lL]
+*.[mM][uU][sS][iI][cC][xX][mM][lL]
+
+# 운영체제, 편집기
+.DS_Store
+.vscode/
+.idea/
