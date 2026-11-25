@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { extname, join, normalize } from "node:path";
 import type { BrowserContext, Page } from "playwright";
@@ -9,14 +9,22 @@ const TYPES: Record<string, string> = {
   ".svg": "image/svg+xml", ".json": "application/json", ".wasm": "application/wasm", ".txt": "text/plain; charset=utf-8",
 };
 
-/** out/을 그대로 내보내는 단순한 정적 서버 */
-export async function serveOut(): Promise<{ url: string; server: Server }> {
+/** 실제 배포에서 붙는 보안 헤더. 시험 서버는 http라 HSTS만 뺀다. */
+const HEADERS = Object.fromEntries(
+  (JSON.parse(readFileSync(join(import.meta.dirname, "..", "..", "vercel.json"), "utf8")) as { headers: { headers: { key: string; value: string }[] }[] }).headers
+    .flatMap((h) => h.headers)
+    .filter((h) => h.key !== "Strict-Transport-Security")
+    .map((h) => [h.key, h.value]),
+);
+
+/** out/을 보안 헤더와 함께 내보내는 단순한 정적 서버. headers가 false면 헤더 없이 */
+export async function serveOut(headers = true): Promise<{ url: string; server: Server }> {
   const server = createServer((request, response) => {
     let path = normalize(join(OUT, decodeURIComponent(new URL(request.url!, "http://x").pathname)));
     if (path.startsWith(OUT) && existsSync(path) && statSync(path).isDirectory()) path = join(path, "index.html");
     const found = path.startsWith(OUT) && existsSync(path);
     if (!found) path = join(OUT, "404.html");
-    response.writeHead(found ? 200 : 404, { "content-type": TYPES[extname(path)] ?? "application/octet-stream" });
+    response.writeHead(found ? 200 : 404, { "content-type": TYPES[extname(path)] ?? "application/octet-stream", ...(headers ? HEADERS : {}) });
     createReadStream(path).pipe(response);
   });
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));

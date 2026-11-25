@@ -23,7 +23,9 @@ function resolvePath(url: string): string | undefined {
 }
 
 function linksIn(html: string): string[] {
-  return [...html.matchAll(/\s(?:href|src)="([^"]*)"/g)].map((m) => m[1]!).filter((url) => !url.startsWith("#"));
+  // 누를 때만 열리는 바깥 링크(<a>)는 요청이 아니다.
+  const inner = html.replace(/<a\s[^>]*href="https:\/\/[^"]*"[^>]*>/g, "");
+  return [...inner.matchAll(/\s(?:href|src)="([^"]*)"/g)].map((m) => m[1]!).filter((url) => !url.startsWith("#"));
 }
 
 test("빌드 결과가 있다", () => {

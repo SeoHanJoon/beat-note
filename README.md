@@ -19,6 +19,7 @@ npm ci
 npm run dev        # 개발 서버
 npm run typecheck  # 타입 검사
 npm run build      # out/에 정적 파일 만들기
+npm run licenses   # 배포물의 라이선스 검사 (build 다음에 실행)
 npm test           # 단위 테스트와 out/ 검사 (build 다음에 실행)
 npm run e2e        # 브라우저 테스트 (npx playwright install chromium webkit 필요)
 ```
