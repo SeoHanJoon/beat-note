@@ -26,6 +26,9 @@ next-env.d.ts
 *.[mM][xX][lL]
 *.[mM][uU][sS][iI][cC][xX][mM][lL]
 
+# 예외: 가사가 없는 결과 템플릿
+!/public/note-template.html
+
 # 운영체제, 편집기
 .DS_Store
 .vscode/
