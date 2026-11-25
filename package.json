@@ -1,0 +1,26 @@
+{
+  "name": "beat-note",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "node --test 'tests/**/*.test.ts'"
+  },
+  "dependencies": {
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.3",
+    "@types/react": "19.3.1",
+    "@types/react-dom": "19.3.0",
+    "typescript": "7.0.2"
+  }
+}
