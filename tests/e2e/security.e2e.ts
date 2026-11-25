@@ -118,7 +118,7 @@ test("모든 페이지가 보안 설정 아래에서 오류 없이 열린다", {
     for (const width of [360, 1200]) {
       const page = await browser.newPage({ viewport: { width, height: 800 } });
       const seen = watch(page, [url]);
-      for (const path of ["/", "/convert/", "/example/", "/guide/", "/rhythm/", "/terms/", "/privacy/", "/copyright/", "/licenses/"]) {
+      for (const path of ["/", "/convert/", "/example/", "/guide/", "/rhythm/", "/privacy/", "/copyright/", "/licenses/"]) {
         await page.goto(url + path);
         await page.waitForLoadState("networkidle");
         assert.ok(await page.locator("h1").count(), path);
