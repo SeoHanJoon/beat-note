@@ -5,7 +5,7 @@ import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { chromium, webkit, type Page } from "playwright";
-import { OUT, serveOut, watch } from "./support.ts";
+import { OUT, REMOTE, serveOut, watch } from "./support.ts";
 
 const score = join(import.meta.dirname, "..", "scores", "c-six-eight.pdf");
 const started: Server[] = [];
@@ -62,7 +62,7 @@ async function trySend(page: Page) {
 }
 
 for (const type of [chromium, webkit])
-  for (const withHeaders of [true, false]) {
+  for (const withHeaders of REMOTE ? [true] : [true, false]) {
     test(`${type.name()}: 변환한 뒤 밖으로 보낼 수 없다 (${withHeaders ? "배포 헤더" : "헤더 없는 호스팅"})`, { timeout: 180_000 }, async () => {
       const { server, url } = await serveOut(withHeaders);
       started.push(server);
@@ -75,8 +75,15 @@ for (const type of [chromium, webkit])
         await page.locator(".editor").waitFor({ timeout: 150_000 });
         assert.deepEqual([seen.external, seen.problems], [[], []], "보안 설정이 변환을 막지 않음");
         received.length = 0;
+        // https 페이지에서는 시험용 바깥 서버(http)가 다른 이유로도 막히므로, CSP가 막았다는 기록도 확인한다.
+        await page.evaluate(() => {
+          const list: string[] = ((window as never as { blocked: string[] }).blocked = []);
+          document.addEventListener("securitypolicyviolation", (e) => list.push(e.effectiveDirective));
+        });
         assert.equal(await trySend(page), undefined, "끼워 넣은 인라인 스크립트가 실행되지 않음");
         assert.deepEqual(received, []);
+        const blocked = await page.evaluate(() => (window as never as { blocked: string[] }).blocked);
+        for (const directive of ["connect-src", "img-src", "script-src-elem", "style-src-elem", "frame-src"]) assert.ok(blocked.includes(directive), `${directive} 막힘 기록 없음: ${[...new Set(blocked)]}`);
       } finally {
         await browser.close();
       }
