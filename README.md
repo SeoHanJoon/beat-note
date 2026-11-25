@@ -30,3 +30,14 @@ npm run e2e        # 브라우저 테스트 (npx playwright install chromium web
 ## 저작권
 
 이 저장소에는 저작권이 있는 악보, 가사, 변환 결과를 넣지 않습니다. 자세한 규칙은 [PLAN.md의 5절](PLAN.md#5-저작권-규칙)에 있습니다.
+
+## 라이선스
+
+이 저장소의 코드와 직접 지은 시험 악보는 [MIT 라이선스](LICENSE)입니다. 함께 들어 있는 다음 자료는 각자의 라이선스를 따릅니다.
+
+- `public/models/`: PaddleOCR 한국어 인식 모델 (Apache-2.0)
+- `src/components/noteGlyphs.ts`: Bravura 글꼴의 음표·쉼표 윤곽 (OFL-1.1)
+- `tests/scores/*.pdf`에 포함된 글꼴 (OFL-1.1)
+- `public/licenses/`: 제3자 라이선스 원문
+
+배포물에 들어가는 것의 전체 목록은 [라이선스 페이지](https://beat-note.vercel.app/licenses/)에 있습니다.

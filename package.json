@@ -45,5 +45,6 @@
     "playwright": "1.65.1",
     "typescript": "7.0.2",
     "verovio": "6.4.1"
-  }
+  },
+  "license": "MIT"
 }
