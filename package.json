@@ -7,7 +7,10 @@
     "node": ">=24"
   },
   "scripts": {
+    "prepare-files": "node scripts/prepare.ts",
+    "predev": "npm run -s prepare-files",
     "dev": "next dev",
+    "prebuild": "npm run -s prepare-files",
     "build": "next build",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "node --test 'tests/**/*.test.ts'",
@@ -16,6 +19,7 @@
   },
   "dependencies": {
     "next": "16.4.6",
+    "pdfjs-dist": "6.5.438",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
