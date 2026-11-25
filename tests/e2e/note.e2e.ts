@@ -45,7 +45,8 @@ for (const type of [chromium, webkit]) {
     await note.locator(".row").first().waitFor();
     assert.equal(await note.locator("h1").textContent(), "아침 걸음");
     const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "HTML 내려받기" }).click()]);
-    assert.equal(download.suggestedFilename().normalize("NFC"), "아침 걸음.html");
+    // 리눅스용 WebKit은 파일 이름의 공백을 _로 바꾼다.
+    assert.match(download.suggestedFilename().normalize("NFC"), /^아침[ _]걸음\.html$/);
     const path = join(dir, `${type.name()}-download.html`);
     await download.saveAs(path);
     assert.deepEqual([seen.external, seen.problems], [[], []]);
