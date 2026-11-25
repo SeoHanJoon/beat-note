@@ -36,7 +36,7 @@ const KNOWN: RegExp[] = [
   /^vendor\/pdfjs\/(LICENSE|pdf\.worker\.min\.mjs)$/, /^vendor\/pdfjs\/cmaps\/([\w-]+\.bcmap|LICENSE)$/, /^vendor\/pdfjs\/iccs\/(CGATS001Compat-v2-micro\.icc|LICENSE)$/,
   /^vendor\/pdfjs\/standard_fonts\/(Foxit\w+\.pfb|LICENSE_FOXIT)$/, /^vendor\/pdfjs\/wasm\/((jbig2|openjpeg|qcms)[\w.]*|LICENSE_\w+)$/,
   /^vendor\/ort\/(ort\.wasm\.min\.mjs|ort-wasm-simd-threaded\.(mjs|wasm))$/, /^vendor\/licenses\/[\w-]+\.txt$/,
-  /^licenses\/onnxruntime-(LICENSE|ThirdPartyNotices)\.txt$/, /^models\/(korean-rec\.onnx|korean-dict\.txt|LICENSE|README\.txt)$/,
+  /^licenses\/(onnxruntime-(LICENSE|ThirdPartyNotices)|bravura-OFL)\.txt$/, /^models\/(korean-rec\.onnx|korean-dict\.txt|LICENSE|README\.txt)$/,
 ];
 const files = readdirSync(out, { recursive: true, withFileTypes: true }).filter((e) => e.isFile()).map((e) => relative(out, join(e.parentPath, e.name)));
 for (const file of files) {
