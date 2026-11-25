@@ -585,3 +585,30 @@ td {
 tbody th {
   font-weight: 500;
 }
+
+.note-table td {
+  vertical-align: middle;
+}
+
+.note-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.note-symbol {
+  flex: none;
+  fill: currentColor;
+}
+
+@media (max-width: 480px) {
+  .note-table {
+    font-size: 14px;
+  }
+
+  .note-cell {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+}

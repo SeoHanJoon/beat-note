@@ -22,7 +22,8 @@
     "postbuild": "node scripts/csp.ts",
     "licenses": "node scripts/check-licenses.ts",
     "measure:robust": "node scripts/measure-robust.ts",
-    "measure:random": "node scripts/measure-random.ts"
+    "measure:random": "node scripts/measure-random.ts",
+    "glyphs": "node scripts/make-glyphs.ts"
   },
   "dependencies": {
     "next": "16.4.6",

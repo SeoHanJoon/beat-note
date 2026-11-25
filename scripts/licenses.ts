@@ -28,5 +28,6 @@ export const NOTICES: Notice[] = [
   { name: "QCMS (PDF.js)", license: "MIT", use: "PDF 색", from: "pdfjs-dist/wasm/LICENSE_QCMS", file: "pdfjs-qcms.txt" },
   { name: "ONNX Runtime Web", package: "onnxruntime-web", license: "MIT", use: "가사 인식 실행", file: "../../licenses/onnxruntime-LICENSE.txt" },
   { name: "ONNX Runtime 제3자 고지", license: "MIT", use: "가사 인식 실행", file: "../../licenses/onnxruntime-ThirdPartyNotices.txt" },
+  { name: "Bravura 글꼴의 음표·쉼표 윤곽", license: "OFL-1.1", use: "박자 읽기 기호", file: "../../licenses/bravura-OFL.txt" },
   { name: "PaddleOCR korean_PP-OCRv5_mobile_rec", license: "Apache-2.0", use: "가사 인식 모델", file: "../../models/LICENSE" },
 ];
