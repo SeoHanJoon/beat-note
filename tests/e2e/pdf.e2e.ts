@@ -48,6 +48,7 @@ for (const type of [chromium, webkit]) {
       await page.goto(url + "/convert/");
       await page.locator("input[type=file]").setInputFiles(join(scores, "d-repeat.pdf"));
       await page.locator(".summary").waitFor({ timeout: 150_000 });
+      await page.getByRole("tab", { name: "미리보기" }).click();
       const note = page.frameLocator("iframe.note-preview");
       await note.locator(".row").first().waitFor();
       const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "HTML 내려받기" }).click()]);

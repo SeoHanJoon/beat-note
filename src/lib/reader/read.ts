@@ -14,6 +14,8 @@ export type System = { page: number; sheet: Sheet; clean: Binary; staff: Staff; 
   bars?: { x0: number; x1: number }[];
   /** 음자리표가 끝나는 x */
   start?: number;
+  /** 가사가 끝나는 y */
+  lyricsEnd?: number;
 };
 
 /** 쪽 이미지에서 오선과 마디를 찾는다. */
@@ -156,7 +158,7 @@ export async function readScore(pages: Gray[], { ocr, onProgress }: ReadOptions 
   score.measures = drafts.map((d, i): ReadMeasure => ({
     page: d.system.page,
     system: d.index,
-    box: { x: d.x0, y: d.system.top, width: d.x1 - d.x0, height: d.system.bottom - d.system.top },
+    box: boxOf(d),
     time: d.time,
     ...(d.left ? { left: d.left } : {}),
     ...(d.right ? { right: d.right } : {}),
@@ -180,6 +182,7 @@ async function readLyrics(systems: System[], drafts: Draft[], lyrics: Syllable[]
     const mine = drafts.map((d, at) => ({ d, at })).filter(({ d }) => d.index === i);
     const slots = mine.flatMap(({ d, at }) => d.solved.events.flatMap((e, k) => (e.mark.kind === "note" ? [{ at, k, x: e.mark.x, tied: d.tied[k]! }] : [])));
     let verse = 0;
+    system.lyricsEnd = rows.at(-1)?.y1;
     for (const row of rows) {
       const chars = await readRow(system.sheet.gray, row, ocr);
       // 한글이 없는 줄(나타냄말 등)은 가사가 아니다.
@@ -241,6 +244,14 @@ function mergeLyrics(d: Draft, verses: Syllable[][]): Pick<ReadMeasure, "events"
   const lyrics = verses.map((v) => v.filter((_, i) => kinds[i] === "on"));
   if (lyrics.some((v) => v.some((c) => c.text.length > 1 && isHangul(c.text[0]!)))) reasons.push("한 음에 글자가 여러 개임");
   return { events, lyrics, ...(reasons.length ? { check: [...new Set(reasons)].join(", ") } : {}) };
+}
+
+/** 교정 화면에서 보여 줄 자리: 화음 이름부터 가사까지 */
+function boxOf(d: Draft): ReadMeasure["box"] {
+  const { staff, top, bottom, lyricsEnd } = d.system;
+  const y = Math.max(top, staff.lines[0]! - staff.space * 6);
+  const end = Math.min(bottom, (lyricsEnd ?? staff.lines[4]! + staff.space * 4) + staff.space * 1.2);
+  return { x: d.x0, y, width: d.x1 - d.x0, height: Math.max(staff.space * 8, end - y) };
 }
 
 function tieBetween(a: Draft, from: NoteMark, b: Draft, to: NoteMark): boolean {
