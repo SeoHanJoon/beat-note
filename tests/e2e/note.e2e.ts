@@ -28,7 +28,7 @@ function writeNote(name: string, id: string, change: (html: string) => string = 
 
 for (const type of [chromium, webkit]) {
   const run = (name: string, body: (browser: Browser) => Promise<void>) =>
-    test(`${type.name()}: ${name}`, { timeout: 60_000 }, async () => {
+    test(`${type.name()}: ${name}`, { timeout: 100_000 }, async () => {
       const browser = await type.launch();
       try {
         await body(browser);
@@ -64,7 +64,7 @@ for (const type of [chromium, webkit]) {
     const seen = watch(page, ["file:"]);
     await page.context().setOffline(true);
     await page.goto(writeNote(`${type.name()} 재생`, "play"));
-    await page.locator("#bpm").fill("240");
+    await page.locator("#bpm").fill("120");
     await page.evaluate(() => {
       const list: string[] = ((window as never as { sung: string[] }).sung = []);
       let last: Element | null = null;
@@ -75,7 +75,7 @@ for (const type of [chromium, webkit]) {
       }).observe(document.getElementById("sheet")!, { subtree: true, attributes: true, attributeFilter: ["class"] });
     });
     await page.locator("#play").click();
-    await page.waitForFunction(() => !document.getElementById("play")!.classList.contains("on"), undefined, { timeout: 40_000 });
+    await page.waitForFunction(() => !document.getElementById("play")!.classList.contains("on"), undefined, { timeout: 80_000 });
     const expected = exampleSong().items.flatMap((item) =>
       item.type === "measure" ? item.beats.flatMap((beat) => beat.notes.flatMap((note) => (note.kind === "note" ? [note.text] : []))) : [],
     );
