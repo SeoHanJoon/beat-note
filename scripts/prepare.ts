@@ -2,6 +2,7 @@
 // Liberation 글꼴(GPLv2와 예외 조항)과 쓰지 않는 QuickJS는 복사하지 않는다.
 import { cpSync, mkdirSync, readdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { NOTICES } from "./licenses.ts";
 
 const root = join(import.meta.dirname, "..");
 const from = join(root, "node_modules", "pdfjs-dist");
@@ -30,3 +31,8 @@ const ortFrom = join(root, "node_modules", "onnxruntime-web");
 const ortTo = join(root, "public", "vendor", "ort");
 mkdirSync(ortTo, { recursive: true });
 for (const name of ["ort.wasm.min.mjs", "ort-wasm-simd-threaded.mjs", "ort-wasm-simd-threaded.wasm"]) cpSync(join(ortFrom, "dist", name), join(ortTo, name));
+
+// 라이선스 원문
+const noticesTo = join(root, "public", "vendor", "licenses");
+mkdirSync(noticesTo, { recursive: true });
+for (const notice of NOTICES) if (notice.from) cpSync(join(root, "node_modules", notice.from), join(noticesTo, notice.file));
