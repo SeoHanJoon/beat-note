@@ -5,7 +5,9 @@
 
 ## 상태
 
-개발 초기입니다. PLAN.md의 단계대로 만들고 있습니다.
+공개 주소: https://beat-note.vercel.app
+
+PLAN.md의 단계를 모두 마쳤습니다. main에 push하면 자동으로 배포됩니다.
 
 - [PLAN.md](PLAN.md): 단계별 계획과 진행 상황
 - [DEVLOG.md](DEVLOG.md): 단계마다 한 일, 측정 결과, 실패와 결정
@@ -21,6 +23,7 @@ npm run typecheck  # 타입 검사
 npm run build      # out/에 정적 파일 만들기
 npm run licenses   # 배포물의 라이선스 검사 (build 다음에 실행)
 npm test           # 단위 테스트와 out/ 검사 (build 다음에 실행)
+# 공개 사이트 시험: BEAT_NOTE_URL=https://beat-note.vercel.app npm run e2e
 npm run e2e        # 브라우저 테스트 (npx playwright install chromium webkit 필요)
 ```
 
