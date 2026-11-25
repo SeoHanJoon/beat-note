@@ -32,7 +32,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <span>악보를 서버로 보내거나 저장하지 않습니다.</span>
             <nav aria-label="안내">
               <Link href="/rhythm/">박자 읽기</Link>
-              <Link href="/terms/">이용약관</Link>
               <Link href="/privacy/">개인정보</Link>
               <Link href="/copyright/">저작권</Link>
               <Link href="/licenses/">라이선스</Link>
