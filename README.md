@@ -5,10 +5,22 @@
 
 ## 상태
 
-개발 초기입니다. 아직 실행할 수 있는 코드가 없습니다.
+개발 초기입니다. 사이트의 뼈대만 있고 변환 기능은 아직 없습니다.
 
 - [PLAN.md](PLAN.md): 단계별 계획과 진행 상황
 - [DEVLOG.md](DEVLOG.md): 단계마다 한 일, 측정 결과, 실패와 결정
+
+## 실행
+
+Node.js 24 이상이 필요합니다.
+
+```sh
+npm ci
+npm run dev        # 개발 서버
+npm run typecheck  # 타입 검사
+npm run build      # out/에 정적 파일 만들기
+npm test           # out/ 검사 (build 다음에 실행)
+```
 
 ## 저작권
 
