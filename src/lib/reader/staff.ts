@@ -1,4 +1,4 @@
-import { binarize, rotate, type Binary } from "./image.ts";
+import { binarize, blurriness, despeckle, flatten, noisiness, resize, rotate, sharpen, soften, type Binary } from "./image.ts";
 import type { Gray } from "./types.ts";
 
 /** 오선 하나. 좌표는 기울기를 바로잡은 이미지 기준 */
@@ -15,7 +15,12 @@ export type Staff = {
   shift: (x: number) => number;
 };
 
-export type Sheet = { image: Binary; gray: Gray; staves: Staff[]; space: number; thick: number };
+export type Sheet = {
+  image: Binary;
+  gray: Gray;
+  /** 원본에서 바꾼 배율 */
+  scale: number;
+  staves: Staff[]; space: number; thick: number };
 
 /** 세로로 이어진 검정·흰색 길이에서 줄 두께와 줄 간격을 잰다. */
 export function measureLines(image: Binary): { thick: number; space: number } | undefined {
@@ -90,20 +95,41 @@ function findSkew(points: [number, number][], width: number, height: number): nu
   return Math.abs(best) < 1e-6 ? 0 : best;
 }
 
+/** 이 범위를 벗어난 크기는 규칙이 맞지 않으므로 크기를 바꿔 읽는다. */
+const BLURRY = 1, SHARPEN_RADIUS = 4;
+const SPACE_MIN = 15, SPACE_MAX = 23, SPACE_IDEAL = 19;
+
 export function readSheet(source: Gray): Sheet | undefined {
-  let gray = source;
-  let image = binarize(gray);
-  const lines = measureLines(image);
+  let gray = flatten(source);
+  /** 흐리면 선을 또렷하게 한 이미지로 검정을 정한다. */
+  const toBinary = (g: Gray) => {
+    const noisy = noisiness(g) > 5;
+    const clean = noisy ? soften(g) : g;
+    const amount = blurriness(clean);
+    if (amount < BLURRY) return binarize(clean);
+    return binarize(sharpen(clean, SHARPEN_RADIUS, noisy || amount < BLURRY * 2 ? 1 : 2));
+  };
+  let image = toBinary(gray);
+  let lines = measureLines(image);
   if (!lines) return undefined;
+  let scale = 1;
+  if (lines.space < SPACE_MIN || lines.space > SPACE_MAX) {
+    scale = SPACE_IDEAL / lines.space;
+    gray = resize(gray, scale);
+    image = toBinary(gray);
+    lines = measureLines(image);
+    if (!lines) return undefined;
+  }
   const { thick, space } = lines;
   let points = thinPoints(image, thick);
   const skew = findSkew(points, image.width, image.height);
   if (Math.abs(skew) * image.width > 3) {
     gray = rotate(gray, -Math.atan(skew));
-    image = binarize(gray);
-    points = thinPoints(image, thick);
+    image = toBinary(gray);
   }
-  return { image, gray, staves: findStaves(image, points, thick, space), space, thick };
+  despeckle(image, Math.round((space * 0.11) ** 2));
+  points = thinPoints(image, thick);
+  return { image, gray, scale, staves: findStaves(image, points, thick, space), space, thick };
 }
 
 function findStaves(image: Binary, points: [number, number][], thick: number, space: number): Staff[] {
@@ -129,11 +155,14 @@ function findStaves(image: Binary, points: [number, number][], thick: number, sp
     return [at, value];
   };
   const tolerance = Math.max(1, Math.round(space * 0.12));
-  const need = (width / 4) * 0.12;
+  const need = Math.max(space * 1.6, (width / 4) * 0.035);
   const candidates: { lines: number[]; score: number }[] = [];
   for (let y = 0; y + space * 4 < height; y++) {
     if (smooth[y]! < need) continue;
-    const found = [0, 1, 2, 3, 4].map((k) => peak(y + k * space, k === 0 ? 0 : tolerance));
+    // 앞 줄에서부터 다음 줄을 찾아 간격의 작은 오차가 쌓이지 않게 한다.
+    const found = [peak(y, 0)];
+    for (let k = 1; k < 5; k++) found.push(peak(found[k - 1]![0] + space, tolerance));
+    if (Math.abs(found[4]![0] - y - space * 4) > space * 0.3) continue;
     const score = Math.min(...found.map((f) => f[1]));
     // 위아래에 여섯째 줄이 있으면 오선이 아니다.
     const outside = Math.max(peak(y - space, tolerance)[1], peak(y + 5 * space, tolerance)[1]);
@@ -201,7 +230,7 @@ function traceStaff(image: Binary, rough: number[], thick: number): Staff | unde
       if (last - start > best[1] - best[0]) best = [start, last];
     }
   }
-  if (best[1] - best[0] < space * 12) return undefined;
+  if (best[1] - best[0] < space * 7) return undefined;
   return { x0: best[0], x1: best[1], lines: rough, space, thick, shift };
 }
 

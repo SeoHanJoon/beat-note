@@ -148,7 +148,7 @@ const CANDIDATES: Time[] = [
 export function estimateTime(measures: { marks: Mark[]; threes: { x: number; y: number }[]; middle: number }[], sign: TimeMark | undefined): Time {
   const options = CANDIDATES.filter((t) => {
     if (sign?.kind === "common") return t.unit === 4 && t.beats === 4;
-    if (sign?.kind === "digits") return sign.lowerHoles >= 2 ? t.unit === 8 : t.unit === 4;
+    if (sign?.kind === "digits") return true;
     return t.beats !== 5 && t.beats !== 7 && t.beats !== 9;
   });
   const beamsOfThree = measures.reduce((sum, m) => sum + beamGroups(m.marks).filter((n) => n === 3).length, 0);
@@ -162,9 +162,11 @@ export function estimateTime(measures: { marks: Mark[]; threes: { x: number; y: 
       const cost = Math.min(...voicesOf(m.marks, m.middle).map((v) => solveMeasure(v.marks, target, m.threes, v.loose).cost + (v.name === "all" ? 0 : 0.2)));
       score += cost === 0 ? 3 : cost < 0.5 ? 2 : cost < 99 ? Math.max(0, 1 - cost) : -1;
     }
+    // 아래 숫자의 구멍이 둘이면 8. 번진 숫자는 구멍이 막힐 수 있어 반대는 약하게만 본다.
+    if (sign?.kind === "digits") score += (sign.lowerHoles >= 2) === (time.unit === 8) ? (time.unit === 8 ? 2 : 0.4) : 0;
     // 3/4와 6/8처럼 길이가 같으면 빔 묶음으로 가른다.
-    if (time.unit === 8 && beamsOfThree <= beamsOfTwo && !sign) score -= 0.5;
-    if (time.unit === 4 && time.beats === 3 && beamsOfThree > beamsOfTwo && !sign) score -= 0.5;
+    if (time.unit === 8 && beamsOfThree <= beamsOfTwo && (sign?.lowerHoles ?? 0) < 2) score -= 0.5;
+    if (time.unit === 4 && time.beats === 3 && beamsOfThree > beamsOfTwo) score -= 0.9;
     score -= CANDIDATES.indexOf(time) * 0.01;
     if (score > top) [top, best] = [score, time];
   }

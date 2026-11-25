@@ -20,7 +20,9 @@
     "measure": "node scripts/measure.ts",
     "measure:local": "node scripts/measure-local.ts",
     "postbuild": "node scripts/csp.ts",
-    "licenses": "node scripts/check-licenses.ts"
+    "licenses": "node scripts/check-licenses.ts",
+    "measure:robust": "node scripts/measure-robust.ts",
+    "measure:random": "node scripts/measure-random.ts"
   },
   "dependencies": {
     "next": "16.4.6",

@@ -31,7 +31,7 @@ export function findSystems(pages: Gray[]): System[] {
         page, sheet, clean, staff,
         spans: splitMeasures(sheet, clean, staff, ceiling),
         top: before ? (before.lines[4]! + staff.lines[0]!) / 2 : Math.max(0, staff.lines[0]! - staff.space * 8),
-        bottom: after ? after.lines[0]! - after.space * 3 : Math.min(gray.height, staff.lines[4]! + staff.space * 11),
+        bottom: after ? after.lines[0]! - after.space * 3 : Math.min(sheet.image.height, staff.lines[4]! + staff.space * 11),
       };
     });
   });
@@ -171,7 +171,10 @@ export async function readScore(pages: Gray[], { ocr, onProgress }: ReadOptions 
 /** 단마다 글자 줄을 읽어 음에 붙인다. lyrics[마디][절][음] */
 async function readLyrics(systems: System[], drafts: Draft[], lyrics: Syllable[][][], ocr: Ocr, onProgress?: ReadOptions["onProgress"]): Promise<void> {
   const taken = systems.map((_, index) =>
-    drafts.filter((d) => d.index === index).flatMap((d) => d.solved.events.flatMap((e) => (e.mark.kind === "rest" ? [e.mark.box] : []))),
+    drafts.filter((d) => d.index === index).flatMap((d) => {
+      const r = d.system.staff.space * 0.6;
+      return d.marks.flatMap((m) => (m.kind === "rest" ? (d.solved.events.some((e) => e.mark === m) ? [m.box] : []) : m.heads.map((h) => ({ x0: h.x - r, x1: h.x + r, y0: h.y - r, y1: h.y + r }))));
+    }),
   );
   const below = (i: number) => (systems[i + 1]?.page === systems[i]!.page ? systems[i + 1]!.staff.lines[0] : undefined);
   const rough = systems.flatMap((s, i) => findRows(s, below(i), taken[i]!).filter((r) => r.blobs.length >= 5).map((r) => (r.y1 - r.y0) / s.staff.space));
@@ -187,6 +190,9 @@ async function readLyrics(systems: System[], drafts: Draft[], lyrics: Syllable[]
       const chars = await readRow(system.sheet.gray, row, ocr);
       // 한글이 없는 줄(나타냄말 등)은 가사가 아니다.
       if (!chars.some((c) => isHangul(c.text))) continue;
+      // 오선 아래의 붙임줄을 글자로 읽은 줄: 다른 줄보다 낮고 확신이 없다.
+      const good = chars.filter((c) => c.score >= 0.8).length / chars.length;
+      if (em && good < 0.5 && (row.y1 - row.y0 < em * system.staff.space * 0.75 || chars.length < slots.length * 0.4)) continue;
       const match = alignSyllables(chars, slots, system.staff.space);
       for (const { at, d } of mine) lyrics[at]![verse] ??= d.solved.events.map(() => ({ text: "", unsure: false }));
       chars.forEach((c, n) => {
@@ -251,7 +257,8 @@ function boxOf(d: Draft): ReadMeasure["box"] {
   const { staff, top, bottom, lyricsEnd } = d.system;
   const y = Math.max(top, staff.lines[0]! - staff.space * 6);
   const end = Math.min(bottom, (lyricsEnd ?? staff.lines[4]! + staff.space * 4) + staff.space * 1.2);
-  return { x: d.x0, y, width: d.x1 - d.x0, height: Math.max(staff.space * 8, end - y) };
+  const k = 1 / d.system.sheet.scale;
+  return { x: d.x0 * k, y: y * k, width: (d.x1 - d.x0) * k, height: Math.max(staff.space * 8, end - y) * k };
 }
 
 function tieBetween(a: Draft, from: NoteMark, b: Draft, to: NoteMark): boolean {
