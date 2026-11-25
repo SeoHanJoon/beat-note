@@ -6,6 +6,9 @@ import type { Truth } from "../scripts/scores/truth.ts";
 import { rotate } from "../src/lib/reader/image.ts";
 import { numberEndings, readScore } from "../src/lib/reader/read.ts";
 import type { Gray, ReadScore } from "../src/lib/reader/types.ts";
+import { solveMeasure } from "../src/lib/reader/rhythm.ts";
+import type { NoteMark } from "../src/lib/reader/symbols.ts";
+import { compare } from "./support/compare.ts";
 import { renderPdf } from "./support/render.ts";
 
 const dir = join(import.meta.dirname, "scores");
@@ -46,4 +49,41 @@ test("1번 괄호는 괄호 줄이 짧아도 도돌이표까지 이어진다", (
   ].map((m): Parameters<typeof numberEndings>[0][number] => m);
   numberEndings(list);
   assert.deepEqual(list.map((m) => m.ending ?? ""), ["", "", "1", "1", "1", "2", "", ""]);
+});
+
+for (const name of names) {
+  test(`${name}: 박자`, async () => {
+    const r = compare(truthOf(name), await readScore(await renderPdf(join(dir, name + ".pdf"))));
+    assert.deepEqual(r.unflagged, [], "틀렸는데 확인 표시가 없는 마디");
+    if (!truthOf(name).handwritten) assert.deepEqual(r.wrong, []);
+  });
+}
+
+const note = (change: Partial<NoteMark> = {}): NoteMark => ({
+  kind: "note", x: 0, y: 0, dir: 1, open: false, whole: false, beams: 0, beamLeft: false, beamRight: false, dots: 0, heads: [], ...change,
+});
+
+test("마디 길이가 맞지 않으면 가장 그럴듯하게 고치고 확인 표시를 한다", () => {
+  const marks = [note(), note(), note(), note({ beams: 1, x: 3 })];
+  const fixed = solveMeasure(marks, 192, []);
+  assert.deepEqual([fixed.exact, fixed.events.reduce((s, e) => s + e.ticks, 0)], [true, 192]);
+  assert.ok(fixed.cost > 0.35);
+  const short = solveMeasure([note()], 192, []);
+  assert.equal(short.exact, false);
+});
+
+test("숫자 3이 있는 빔 세 개는 셋잇단음표다", () => {
+  const marks = [
+    note({ beams: 1, beamRight: true, x: 10 }), note({ beams: 1, beamLeft: true, beamRight: true, x: 20 }), note({ beams: 1, beamLeft: true, x: 30 }),
+    note({ x: 60 }), note({ x: 90 }), note({ x: 120 }),
+  ];
+  const solved = solveMeasure(marks, 192, [{ x: 20, y: 0 }]);
+  assert.deepEqual([solved.cost, solved.events.map((e) => e.ticks)], [0, [16, 16, 16, 48, 48, 48]]);
+});
+
+test("기울어진 이미지의 박자", async () => {
+  const pages = await renderPdf(join(dir, "d-repeat.pdf"));
+  const r = compare(truthOf("d-repeat"), await readScore(pages.map((p) => rotate(p, 0.012))));
+  assert.deepEqual(r.unflagged, []);
+  assert.ok(r.cells > 0.95, `칸 ${r.cells}`);
 });

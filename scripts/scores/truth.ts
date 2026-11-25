@@ -104,7 +104,7 @@ function layerXml(text: string, lyrics: string[], verses: number, beat: number, 
     let xml: string;
     if (note.pitch === null) {
       tied = false;
-      xml = `<rest xml:id="${id()}" ${attrs}${stem ? ` ploc="${stem === "down" ? "d" : "b"}" oloc="${stem === "down" ? 4 : 5}"` : ""}/>`;
+      xml = `<rest xml:id="${id()}" ${attrs}/>`;
     } else {
       const tie = note.tie ? (tied ? "m" : "i") : tied ? "t" : "";
       const held = tied || note.slurred;
