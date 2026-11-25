@@ -59,3 +59,11 @@ test("스타일이 외부 주소를 부르지 않는다", () => {
     assert.doesNotMatch(readFileSync(file, "utf8"), /(?:url\(|@import)\s*["']?(?:https?:)?\/\//, file);
   }
 });
+
+test("GPL 글꼴(Liberation)이 배포물에 없다", () => {
+  for (const file of listFiles(OUT)) {
+    assert.doesNotMatch(file, /liberation/i);
+    if (/\.(ttf|otf|woff2?|pfb)$/.test(file)) assert.doesNotMatch(readFileSync(file, "latin1"), /L\0?i\0?b\0?e\0?r\0?a\0?t\0?i\0?o\0?n/i, file);
+  }
+  assert.ok(existsSync(join(OUT, "vendor/pdfjs/standard_fonts/LICENSE_FOXIT")));
+});
