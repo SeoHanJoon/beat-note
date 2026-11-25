@@ -113,3 +113,34 @@ a:focus-visible {
     font-size: 25px;
   }
 }
+
+.button {
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.note-preview {
+  display: block;
+  width: 100%;
+  height: min(720px, 80dvh);
+  margin-top: 16px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: #fff;
+}
