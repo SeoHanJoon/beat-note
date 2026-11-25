@@ -19,11 +19,25 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <Link className="site-name" href="/">
               beat-note
             </Link>
+            <nav aria-label="주 메뉴">
+              <Link href="/convert/">변환</Link>
+              <Link href="/example/">예시</Link>
+              <Link href="/guide/">사용법</Link>
+            </nav>
           </div>
         </header>
         <main className="wrap">{children}</main>
         <footer className="site-footer">
-          <div className="wrap">악보를 서버로 보내거나 저장하지 않습니다.</div>
+          <div className="wrap">
+            <span>악보를 서버로 보내거나 저장하지 않습니다.</span>
+            <nav aria-label="안내">
+              <Link href="/rhythm/">박자 읽기</Link>
+              <Link href="/terms/">이용약관</Link>
+              <Link href="/privacy/">개인정보</Link>
+              <Link href="/copyright/">저작권</Link>
+              <Link href="/licenses/">라이선스</Link>
+            </nav>
+          </div>
         </footer>
       </body>
     </html>
