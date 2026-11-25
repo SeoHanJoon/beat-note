@@ -144,3 +144,66 @@ a:focus-visible {
   border-radius: 12px;
   background: #fff;
 }
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 36px 20px;
+  border: 2px dashed #c3c7ce;
+  border-radius: 14px;
+  background: #fff;
+  text-align: center;
+  cursor: pointer;
+}
+
+.picker span {
+  color: var(--sub);
+  font-size: 14px;
+}
+
+.picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.picker:hover,
+.picker.over,
+.picker:focus-within {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.error {
+  margin-top: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.pages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+}
+
+.page {
+  margin: 0;
+}
+
+.page canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+  background: #fff;
+}
+
+.page figcaption {
+  color: var(--sub);
+  font-size: 13px;
+  text-align: center;
+}
