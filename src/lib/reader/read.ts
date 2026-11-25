@@ -1,11 +1,13 @@
 import type { Time } from "../song/types.ts";
+import { alignSyllables, dashesOf, findRows, readRow } from "./lyrics.ts";
+import { isHangul, type Ocr } from "./ocr.ts";
 import { findBarlines, splitMeasures, type MeasureSpan } from "./bars.ts";
 import type { Binary } from "./image.ts";
 import { estimateTime, solveMeasure, timeTicks, voicesOf, type Solved, type Voice } from "./rhythm.ts";
 import { readSheet, removeStaffLines, type Sheet, type Staff } from "./staff.ts";
 import { readSymbols, type Mark, type NoteMark, type TimeMark } from "./symbols.ts";
 import { hasHalfTie, hasTie } from "./ties.ts";
-import { emptyScore, type Gray, type ReadMeasure, type ReadScore } from "./types.ts";
+import { emptyScore, type Gray, type ReadEvent, type ReadMeasure, type ReadScore, type Syllable } from "./types.ts";
 
 export type System = { page: number; sheet: Sheet; clean: Binary; staff: Staff; spans: MeasureSpan[]; top: number; bottom: number;
   bars?: { x0: number; x1: number }[];
@@ -64,6 +66,8 @@ type Draft = MeasureSpan & {
   voice: Voice["name"];
   /** 음표마다 앞 음에서 붙임줄로 이어지는지 */
   tied: boolean[];
+  /** 아래에 끄는 표시가 있는 음 */
+  dashed?: Set<number>;
 };
 
 /** 음표 아래에 글자 같은 잉크가 있는지 */
@@ -82,8 +86,10 @@ function inkBelow(system: System, x: number): boolean {
 
 const pitchOf = (mark: NoteMark, staff: Staff) => (mark.y - staff.lines[0]! - staff.shift(mark.x)) / staff.space;
 
+export type ReadOptions = { ocr?: Ocr; onProgress?: (done: number, total: number) => void };
+
 /** 쪽 이미지들에서 악보를 읽는다. */
-export async function readScore(pages: Gray[]): Promise<ReadScore> {
+export async function readScore(pages: Gray[], { ocr, onProgress }: ReadOptions = {}): Promise<ReadScore> {
   const systems = findSystems(pages);
   const drafts: Draft[] = [];
   systems.forEach((system, index) => {
@@ -140,24 +146,99 @@ export async function readScore(pages: Gray[]): Promise<ReadScore> {
     previous = draft;
   }
 
+  const lyrics = drafts.map((): Syllable[][] => []);
+  if (ocr) await readLyrics(systems, drafts, lyrics, ocr, onProgress);
+
   const score = emptyScore();
   score.time = drafts[0]?.time ?? score.time;
-  score.measures = drafts.map((d): ReadMeasure => {
-    const check = checkReason(d);
-    return {
-      page: d.system.page,
-      system: d.index,
-      box: { x: d.x0, y: d.system.top, width: d.x1 - d.x0, height: d.system.bottom - d.system.top },
-      time: d.time,
-      ...(d.left ? { left: d.left } : {}),
-      ...(d.right ? { right: d.right } : {}),
-      ...(d.ending ? { ending: d.ending } : {}),
-      events: d.solved.events.map((e, i) => ({ kind: e.mark.kind === "rest" ? "rest" : d.tied[i] ? "hold" : "on", ticks: e.ticks, x: e.mark.x })),
-      lyrics: [],
-      ...(check ? { check } : {}),
-    };
-  });
+  score.measures = drafts.map((d, i): ReadMeasure => ({
+    page: d.system.page,
+    system: d.index,
+    box: { x: d.x0, y: d.system.top, width: d.x1 - d.x0, height: d.system.bottom - d.system.top },
+    time: d.time,
+    ...(d.left ? { left: d.left } : {}),
+    ...(d.right ? { right: d.right } : {}),
+    ...(d.ending ? { ending: d.ending } : {}),
+    ...mergeLyrics(d, lyrics[i]!),
+  }));
   return score;
+}
+
+/** 단마다 글자 줄을 읽어 음에 붙인다. lyrics[마디][절][음] */
+async function readLyrics(systems: System[], drafts: Draft[], lyrics: Syllable[][][], ocr: Ocr, onProgress?: ReadOptions["onProgress"]): Promise<void> {
+  const taken = systems.map((_, index) =>
+    drafts.filter((d) => d.index === index).flatMap((d) => d.solved.events.flatMap((e) => (e.mark.kind === "rest" ? [e.mark.box] : []))),
+  );
+  const below = (i: number) => (systems[i + 1]?.page === systems[i]!.page ? systems[i + 1]!.staff.lines[0] : undefined);
+  const rough = systems.flatMap((s, i) => findRows(s, below(i), taken[i]!).filter((r) => r.blobs.length >= 5).map((r) => (r.y1 - r.y0) / s.staff.space));
+  rough.sort((a, b) => a - b);
+  const em = rough[rough.length >> 1];
+  for (const [i, system] of systems.entries()) {
+    const rows = findRows(system, below(i), taken[i]!, em ? em * system.staff.space : undefined);
+    const mine = drafts.map((d, at) => ({ d, at })).filter(({ d }) => d.index === i);
+    const slots = mine.flatMap(({ d, at }) => d.solved.events.flatMap((e, k) => (e.mark.kind === "note" ? [{ at, k, x: e.mark.x, tied: d.tied[k]! }] : [])));
+    let verse = 0;
+    for (const row of rows) {
+      const chars = await readRow(system.sheet.gray, row, ocr);
+      // 한글이 없는 줄(나타냄말 등)은 가사가 아니다.
+      if (!chars.some((c) => isHangul(c.text))) continue;
+      const match = alignSyllables(chars, slots, system.staff.space);
+      for (const { at, d } of mine) lyrics[at]![verse] ??= d.solved.events.map(() => ({ text: "", unsure: false }));
+      chars.forEach((c, n) => {
+        const slot = slots[match[n]!];
+        // 음과 짝이 없는 글자는 가장 가까운 음 뒤에 붙이고 확인하게 한다.
+        const target = slot ?? slots.reduce<typeof slots[number] | undefined>((best, o) => (!best || Math.abs(o.x - c.x) < Math.abs(best.x - c.x) ? o : best), undefined);
+        if (!target) return;
+        const cell = lyrics[target.at]![verse]![target.k]!;
+        cell.text = cell.text ? cell.text + c.text : c.text;
+        if (!slot || c.score < 0.8 || c.text === "") cell.unsure = true;
+      });
+      // 글자 없이 가로줄만 있는 음은 앞 글자를 끄는 음
+      for (const x of dashesOf(row)) {
+        const near = slots.reduce<typeof slots[number] | undefined>((best, o) => (!best || Math.abs(o.x - x) < Math.abs(best.x - x) ? o : best), undefined);
+        if (near && Math.abs(near.x - x) < system.staff.space * 0.9) (drafts[near.at]!.dashed ??= new Set()).add(near.k);
+      }
+      verse++;
+    }
+    onProgress?.(i + 1, systems.length);
+  }
+}
+
+/** 글자가 있는 음은 새로 부르는 음, 없는 음은 앞 음을 이어 부르는 음으로 정한다. */
+function mergeLyrics(d: Draft, verses: Syllable[][]): Pick<ReadMeasure, "events" | "lyrics" | "check"> {
+  const reasons: string[] = [];
+  const base = checkReason(d);
+  if (base) reasons.push(base);
+  const sung = verses.filter((v) => v.some((c) => c.text || c.unsure));
+  const kinds = d.solved.events.map((e, i): ReadEvent["kind"] => {
+    if (e.mark.kind === "rest") return "rest";
+    if (sung.length === 0) return d.tied[i] ? "hold" : "on";
+    const has = sung.some((v) => v[i]!.text || v[i]!.unsure);
+    if (has) {
+      if (d.tied[i]) reasons.push("붙임줄로 이어진 음에 글자가 있음");
+      return "on";
+    }
+    return d.tied[i] ? "hold" : "on";
+  });
+  // 글자가 있는 마디에서 글자 없는 음: 앞 음이 있으면 이어 부른다.
+  if (sung.length)
+    kinds.forEach((kind, i) => {
+      const empty = kind === "on" && !sung.some((v) => v[i]!.text || v[i]!.unsure);
+      if (!empty) return;
+      if (i === 0 && d.dashed?.has(0)) {
+        kinds[i] = "hold";
+        return;
+      }
+      const [before, mark] = [d.solved.events[i - 1]?.mark, d.solved.events[i]!.mark];
+      // 이음줄로 이어진 음은 앞 글자를 이어 부른다.
+      const slurred = before?.kind === "note" && mark.kind === "note" && hasTie(d.system.clean, d.system.staff, before, mark, d.system.bars ?? []);
+      if ((slurred || d.dashed?.has(i)) && kinds[i - 1] !== "rest") kinds[i] = "hold";
+      else reasons.push("글자를 찾지 못한 음이 있음");
+    });
+  const events = d.solved.events.map((e, i): ReadEvent => ({ kind: kinds[i]!, ticks: e.ticks, x: e.mark.x }));
+  const lyrics = verses.map((v) => v.filter((_, i) => kinds[i] === "on"));
+  if (lyrics.some((v) => v.some((c) => c.text.length > 1 && isHangul(c.text[0]!)))) reasons.push("한 음에 글자가 여러 개임");
+  return { events, lyrics, ...(reasons.length ? { check: [...new Set(reasons)].join(", ") } : {}) };
 }
 
 function tieBetween(a: Draft, from: NoteMark, b: Draft, to: NoteMark): boolean {
