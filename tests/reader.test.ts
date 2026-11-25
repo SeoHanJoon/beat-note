@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -8,7 +9,9 @@ import { numberEndings, readScore } from "../src/lib/reader/read.ts";
 import type { Gray, ReadScore } from "../src/lib/reader/types.ts";
 import { solveMeasure } from "../src/lib/reader/rhythm.ts";
 import type { NoteMark } from "../src/lib/reader/symbols.ts";
+import { alignSyllables } from "../src/lib/reader/lyrics.ts";
 import { compare } from "./support/compare.ts";
+import { nodeOcr } from "./support/ocr.ts";
 import { renderPdf } from "./support/render.ts";
 
 const dir = join(import.meta.dirname, "scores");
@@ -86,4 +89,28 @@ test("기울어진 이미지의 박자", async () => {
   const r = compare(truthOf("d-repeat"), await readScore(pages.map((p) => rotate(p, 0.012))));
   assert.deepEqual(r.unflagged, []);
   assert.ok(r.cells > 0.95, `칸 ${r.cells}`);
+});
+
+for (const name of names) {
+  test(`${name}: 가사`, async () => {
+    const truth = truthOf(name);
+    const r = compare(truth, await readScore(await renderPdf(join(dir, name + ".pdf")), { ocr: await nodeOcr() }));
+    assert.deepEqual(r.unflagged, [], "틀렸는데 확인 표시가 없는 마디");
+    if (truth.handwritten) return;
+    assert.deepEqual(r.wrong, [], "가사를 붙이면서 박자가 달라짐");
+    assert.ok(r.text >= 0.95, `글자 ${r.text}`);
+  });
+}
+
+test("음절을 순서대로 가까운 음에 붙인다", () => {
+  const notes = [100, 140, 180, 220].map((x) => ({ x, tied: x === 140 }));
+  assert.deepEqual(alignSyllables([{ x: 101 }, { x: 178 }, { x: 225 }], notes, 20), [0, 2, 3]);
+  assert.deepEqual(alignSyllables([{ x: 100 }, { x: 400 }], notes.slice(0, 1), 20), [0, -1]);
+  assert.deepEqual(alignSyllables([], notes, 20), []);
+});
+
+test("모델 파일이 기록한 것과 같다", () => {
+  const model = readFileSync(join(import.meta.dirname, "..", "public/models/korean-rec.onnx"));
+  const readme = readFileSync(join(import.meta.dirname, "..", "public/models/README.txt"), "utf8");
+  assert.ok(readme.includes(createHash("sha256").update(model).digest("hex")));
 });
